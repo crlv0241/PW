@@ -38,6 +38,8 @@ These constraints supersede all suggestions and must NEVER be violated:
 - **NEVER MUTATE COUPLED FINANCIAL (AR) & PHYSICAL (LEDGER) STATE OUTSIDE `DB::transaction()`**: Both updates must succeed together or roll back completely.
 - **NEVER MAKE SLOW I/O OR EXTERNAL HTTP CALLS INSIDE TRANSACTIONS**: Dispatch background queue jobs using `DB::afterCommit()`.
 - **NEVER USE `any` IN TYPESCRIPT**: Maintain strict types across all interfaces, props, and API payloads.
+- **NEVER USE BROWSER `alert()`, `confirm()`, OR `prompt()`**: Never use native blocking browser popups. Always use styled, accessible React modal confirmation dialogs and non-blocking toast notifications.
+- **NEVER USE RAW UNSEARCHABLE `<select>` FOR DYNAMIC/LONG LISTS**: Always use searchable single-select comboboxes or searchable multi-select components with filtering, keyboard navigation, and removable badge chips.
 - **NEVER INSTALL NEW DEPENDENCIES WITHOUT APPROVAL**: Do not modify `composer.json` or `package.json` dependencies without explicit user request.
 - **NEVER EDIT COMMITTED MIGRATIONS**: Create a new sequential migration to alter existing schemas.
 - **NEVER WRITE UNPARAMETERIZED RAW SQL**: Always use Eloquent query builder or parameterized bindings (`DB::raw('...', [$val])`).
@@ -69,11 +71,14 @@ These constraints supersede all suggestions and must NEVER be violated:
   If the abstraction adds unnecessary complexity, prefer slight duplication over a bad abstraction.
 - **Modern UI & Smooth Color Gradients**:
   Always design with modern, premium enterprise aesthetics. When applying color gradients, use smooth, low-contrast tonal transitions (e.g. adjacent monochromatic shades like `from-slate-900 to-slate-800` or subtle opacity washes like `from-indigo-500/10 via-transparent to-transparent`). NEVER use harsh, jarring gradients that jump aggressively from light to dark on the same surface.
+- **Searchable Selection & Accessible Modals**:
+  Always use searchable dropdowns (comboboxes or multi-select with search and badges) for entity selection (products, customers, bins, UOMs). Never use vanilla browser `alert()` or `confirm()`; use accessible React modals with cancel/confirm buttons and async loading states.
 
 ---
 
 ## 6. Domain Skills Activation (Progressive Disclosure)
 Detailed procedures and reference guides are organized into specialized skills in `.agents/skills/`. You MUST activate the relevant skill before executing tasks in its domain:
+- `dropdown-engineering`: Searchable single-select combobox, searchable multi-select with badges, keyboard navigation, accessible confirmation modals.
 - `table-engineering`: Optimized data tables, server-side pagination, debounced multi-column filtering, skeleton rows, URL query sync.
 - `frontend-senior-engineer`: UI components, React/Inertia, barcode scanner keystroke buffering, offline queues, professional iconography, smooth gradients.
 - `backend-senior-engineer`: Single-action controllers, Form Requests, Redis queues, idempotent sync endpoints, RFC 7807 error envelopes.

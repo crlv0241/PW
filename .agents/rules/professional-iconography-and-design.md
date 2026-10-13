@@ -29,3 +29,12 @@
 - **Accessibility Invariant**:
   - Never layer body copy over shifting multi-color gradient backgrounds. Always maintain WCAG AA (4.5:1) text contrast ratios against background surfaces.
 
+## Modern Dialogs & Searchable Selection
+- **No Native Browser Dialogs**:
+  - NEVER use `window.alert()`, `window.confirm()`, or `window.prompt()`.
+  - Always use styled, accessible React modal dialogs with backdrop blur (`backdrop-blur-sm`), clear cancel/confirm buttons, loading indicators on execution, and non-blocking toast notifications for status updates.
+- **Searchable Dropdowns (Select & Multi-Select)**:
+  - NEVER use unsearchable raw HTML `<select>` tags for entity or catalog selection.
+  - Always use searchable single-select comboboxes or searchable multi-select dropdowns featuring integrated search filtering, keyboard navigation, and removable badge chips.
+
+
