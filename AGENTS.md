@@ -42,6 +42,12 @@ These constraints supersede all suggestions and must NEVER be violated:
 - **NEVER EDIT COMMITTED MIGRATIONS**: Create a new sequential migration to alter existing schemas.
 - **NEVER WRITE UNPARAMETERIZED RAW SQL**: Always use Eloquent query builder or parameterized bindings (`DB::raw('...', [$val])`).
 
+*Detailed rule files enforcing these guardrails are organized in `.agents/rules/`:*
+- [`professional-iconography-and-design.md`](.agents/rules/professional-iconography-and-design.md)
+- [`database-and-ledger-invariants.md`](.agents/rules/database-and-ledger-invariants.md)
+- [`security-and-data-protection.md`](.agents/rules/security-and-data-protection.md)
+- [`code-standards-and-scalability.md`](.agents/rules/code-standards-and-scalability.md)
+
 ---
 
 ## 4. System Invariants & Domain Rules
