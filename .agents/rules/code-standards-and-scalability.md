@@ -15,3 +15,14 @@
   - TypeScript: Strict typing enabled; no implicit `any`.
   - Run `vendor/bin/pint --format agent` to format all modified PHP code.
   - Run Pest automated tests on modified components.
+
+## General Coding & UI/UX Standards
+1. **Async UI/UX (Loading States)**:
+   - Whenever generating or modifying UI components that execute asynchronous requests or data fetching, ALWAYS include a loading indicator or skeleton state. Never leave the UI unresponsive during network delays.
+2. **Thoughtful Abstraction (DRY Principle)**:
+   - Apply the DRY (Don't Repeat Yourself) principle professionally, but NEVER abstract blindly. Before consolidating code into a shared component, hook, or trait, you must silently assess:
+     - Is this abstraction actually appropriate for both use cases?
+     - Will it negatively impact component rendering performance?
+     - Does it tightly couple components that might evolve independently?
+   - If the abstraction adds unnecessary complexity, prefer slight duplication over a bad abstraction.
+

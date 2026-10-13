@@ -24,3 +24,16 @@
 - Fonts: Clean sans-serif (Inter, Roboto, or Outfit).
 - Color contrast: Minimum WCAG AA 4.5:1 ratio for body copy (`text-slate-900` on white, `text-slate-100` on dark) and 3:1 for large headers (`text-slate-700` / `text-slate-300`).
 - Tabular figures: High-density numeric data (prices, stock quantities, barcodes) must use `font-mono` or `tabular-nums` to guarantee aligned columns in tables.
+
+## 4. Modern Enterprise Design & Smooth Color Gradients
+- **Subtle, Low-Contrast Gradients**:
+  - Never use jarring, high-contrast gradients that jump abruptly from light to dark on the same surface.
+  - Employ smooth, monochromatic or analogous color shifts using adjacent shade steps:
+    - Light Mode Containers: `bg-gradient-to-b from-slate-50 via-white to-slate-100/50`
+    - Dark Mode Containers: `bg-gradient-to-b from-slate-900 to-slate-800`
+    - Primary CTA Buttons: `bg-gradient-to-b from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600`
+- **Ambient Glows & Opacity Washes**:
+  - Use subtle opacity washes (e.g., `from-indigo-500/10 via-transparent to-transparent`) for soft card depth and modern glassmorphism.
+- **Async Loading States & Skeletons**:
+  - Always pair asynchronous data containers with animated pulsing skeleton placeholders (`animate-pulse bg-slate-200 dark:bg-slate-700 rounded`). Never leave the screen unresponsive during network latency.
+

@@ -58,9 +58,24 @@ These constraints supersede all suggestions and must NEVER be violated:
 
 ---
 
-## 5. Domain Skills Activation (Progressive Disclosure)
+## 5. General Coding & UI/UX Standards
+- **Async UI/UX (Loading States)**:
+  Whenever generating or modifying UI components that execute asynchronous requests or data fetching, ALWAYS include a loading indicator or skeleton state. Never leave the UI unresponsive during network delays.
+- **Thoughtful Abstraction (DRY Principle)**:
+  Apply the DRY (Don't Repeat Yourself) principle professionally, but NEVER abstract blindly. Before consolidating code into a shared component, hook, or trait, you must silently assess:
+  - Is this abstraction actually appropriate for both use cases?
+  - Will it negatively impact component rendering performance?
+  - Does it tightly couple components that might evolve independently?
+  If the abstraction adds unnecessary complexity, prefer slight duplication over a bad abstraction.
+- **Modern UI & Smooth Color Gradients**:
+  Always design with modern, premium enterprise aesthetics. When applying color gradients, use smooth, low-contrast tonal transitions (e.g. adjacent monochromatic shades like `from-slate-900 to-slate-800` or subtle opacity washes like `from-indigo-500/10 via-transparent to-transparent`). NEVER use harsh, jarring gradients that jump aggressively from light to dark on the same surface.
+
+---
+
+## 6. Domain Skills Activation (Progressive Disclosure)
 Detailed procedures and reference guides are organized into specialized skills in `.agents/skills/`. You MUST activate the relevant skill before executing tasks in its domain:
-- `frontend-senior-engineer`: UI components, React/Inertia, barcode scanner keystroke buffering, offline queues, professional iconography.
+- `table-engineering`: Optimized data tables, server-side pagination, debounced multi-column filtering, skeleton rows, URL query sync.
+- `frontend-senior-engineer`: UI components, React/Inertia, barcode scanner keystroke buffering, offline queues, professional iconography, smooth gradients.
 - `backend-senior-engineer`: Single-action controllers, Form Requests, Redis queues, idempotent sync endpoints, RFC 7807 error envelopes.
 - `senior-database-engineer`: MySQL 8 schemas, migrations, ledger tables, balance caches, pessimistic locking (`lockForUpdate`), indexing.
 - `clean-code-architecture`: SOLID principles, domain layering, typed DTOs, guard clauses & early returns, naming conventions.
