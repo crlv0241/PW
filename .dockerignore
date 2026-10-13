@@ -1,0 +1,9 @@
+.git
+.github
+vendor
+node_modules
+storage/framework
+storage/logs
+.env
+.env.*
+docker/mysql/init/*.sql
