@@ -28,6 +28,9 @@ Always use these exact commands:
 ## 3. Strict Guardrails ("NEVER DO THIS")
 These negative constraints supersede all other suggestions and must NEVER be violated:
 - **ZERO EMOJI POLICY**: NEVER use emojis in UI, code, comments, commits, API errors, or docs. Always use SVG vector icons (`lucide-react`, `@heroicons/react`).
+- **NEVER USE `FLOAT` OR `DOUBLE` FOR FINANCIAL CALCULATIONS**: Always use PHP 8.4 `BcMath\Number` or integer cents; store as `DECIMAL(18, 4)` for rates or `DECIMAL(18, 2)` / `BIGINT` for balances.
+- **NEVER ROUND DISCOUNTS OR TAXES ARBITRARILY**: Always use deterministic half-up rounding and Fowler's Allocation Algorithm to guarantee $\sum \text{allocated}_i \equiv \text{Total}$.
+- **NEVER MUTATE FINANCIAL BALANCES WITHOUT BALANCED JOURNAL ENTRIES**: Enforce the double-entry invariant $\sum \text{Debits} - \sum \text{Credits} \equiv 0$.
 - **NEVER CALCULATE INVENTORY VIA `SUM(qty_change)` LIVE**: Always query the indexed `inventory_balances` cache.
 - **NEVER OMIT `client_uuid` ON MUTATING POS/SYNC ENDPOINTS**: Validate `client_uuid` for idempotent deduplication.
 - **NEVER MUTATE FINANCIAL (AR) & PHYSICAL (LEDGER) STATE OUTSIDE `DB::transaction()`**: Dual updates must succeed or roll back together.
@@ -44,6 +47,7 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 ---
 
 ## 4. System Invariants & Domain Rules
+- **Conservation of Value & Money**: Money is never created or destroyed. Invoices strictly satisfy $\sum \text{line\_totals} \equiv \text{invoice.grand\_total}$. Historical invoice lines snapshot unit prices, costs, discounts, and taxes immutably.
 - **Lowest-Common-Denominator Atomicity**: All inventory is stored, transferred, and calculated in whole integer base units (pieces/eaches). Multi-UOM conversions (`product_uoms`) must resolve to integers.
 - **Write-Ahead Ledger & Balance Cache**: Physical movements write append-only, immutable rows to `inventory_ledgers` and synchronously update `inventory_balances`.
 - **Clean Architecture & SOLID**: Thin controllers, single-action domain classes (`app/Actions`), models focused on relationships/casts/scopes. Guard clauses and early returns over nested conditionals.
@@ -60,6 +64,7 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 
 ## 6. Domain Skills Activation (Progressive Disclosure)
 Activate the corresponding skill in `.agents/skills/` when working in that domain:
+- `financial-engineering`: Money value objects, `BcMath\Number`, Fowler penny allocation, double-entry AR, tax reconciliation, cash shifts.
 - `table-engineering`: Server-side pagination, debounced multi-column filters, URL query sync, skeleton rows.
 - `dropdown-engineering`: Searchable single-select combobox, searchable multi-select with badges, accessible confirmation modals.
 - `frontend-senior-engineer`: UI components, React/Inertia, barcode keystroke buffer, offline queue UX, smooth gradients.
