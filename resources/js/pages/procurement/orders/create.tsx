@@ -54,6 +54,7 @@ interface OrderDiscountStep {
 interface ParsedPunch {
     query: string;
     qty: number;
+    uomHint?: string;
     isOnlyMultiplier: boolean;
 }
 
@@ -195,6 +196,28 @@ function computeDiscountPipeline(
  * - "BEV*3" -> punches 3 of item matching "BEV"
  * - "BEV" -> punches 1 of item matching "BEV"
  */
+function extractUomAndQuery(raw: string): { query: string; uomHint?: string } {
+    const trimmed = raw.trim();
+    const slashIdx = trimmed.lastIndexOf('/');
+    const colonIdx = trimmed.lastIndexOf(':');
+    const sepIdx = Math.max(slashIdx, colonIdx);
+    if (sepIdx !== -1 && sepIdx < trimmed.length - 1) {
+        return {
+            query: trimmed.slice(0, sepIdx).trim(),
+            uomHint: trimmed.slice(sepIdx + 1).trim().toUpperCase(),
+        };
+    }
+    return { query: trimmed };
+}
+
+/**
+ * High-speed multiplier & UOM shortcut parser:
+ * - "*3" or "3*" -> sets sticky multiplier to 3
+ * - "3*BEV" -> punches 3 of item matching "BEV"
+ * - "3*BEV/CS" or "10*BEV:CASE" -> punches 3 of item in Case UOM
+ * - "BEV/BOX*5" -> punches 5 Boxes of BEV
+ * - "BEV" -> punches 1 of item matching "BEV"
+ */
 function parsePunchQuery(rawInput: string): ParsedPunch {
     const trimmed = rawInput.trim();
     if (!trimmed) {
@@ -213,9 +236,11 @@ function parsePunchQuery(rawInput: string): ParsedPunch {
     const prefixMatch = trimmed.match(/^(\d+)\*(.+)$/);
     if (prefixMatch) {
         const qty = parseInt(prefixMatch[1], 10);
+        const { query, uomHint } = extractUomAndQuery(prefixMatch[2]);
         return {
-            query: prefixMatch[2].trim(),
+            query,
             qty: Math.max(1, qty),
+            uomHint,
             isOnlyMultiplier: false,
         };
     }
@@ -223,18 +248,68 @@ function parsePunchQuery(rawInput: string): ParsedPunch {
     const suffixMatch = trimmed.match(/^(.+)\*(\d+)$/);
     if (suffixMatch) {
         const qty = parseInt(suffixMatch[2], 10);
+        const { query, uomHint } = extractUomAndQuery(suffixMatch[1]);
         return {
-            query: suffixMatch[1].trim(),
+            query,
             qty: Math.max(1, qty),
+            uomHint,
             isOnlyMultiplier: false,
         };
     }
 
+    const { query, uomHint } = extractUomAndQuery(trimmed);
     return {
-        query: trimmed,
+        query,
         qty: 1,
+        uomHint,
         isOnlyMultiplier: false,
     };
+}
+
+/**
+ * Finds best matching UOM for a product.
+ * In Procurement / Inbound orders, defaults to largest packaging tier (e.g. Case or Box) rather than Piece.
+ */
+function findMatchingUom(product: Product, uomHint?: string): ProductUom | undefined {
+    if (!product.uoms || product.uoms.length === 0) return undefined;
+    if (!uomHint) {
+        // Smart Procurement Default: Highest packaging tier (largest conversion_factor)
+        return [...product.uoms].sort((a, b) => b.conversion_factor - a.conversion_factor)[0];
+    }
+    const cleanHint = uomHint.toUpperCase();
+
+    // 1. Exact name match
+    const exact = product.uoms.find((u) => u.name.toUpperCase() === cleanHint);
+    if (exact) return exact;
+
+    // 2. Common abbreviation aliases
+    const aliases: Record<string, string[]> = {
+        CS: ['CASE', 'CARTON', 'CTN'],
+        CASE: ['CASE', 'CARTON', 'CTN'],
+        CTN: ['CARTON', 'CASE'],
+        BX: ['BOX'],
+        BOX: ['BOX'],
+        PK: ['PACK', 'PKG'],
+        PACK: ['PACK', 'PKG'],
+        PC: ['PIECE', 'PCS', 'EACH', 'EA'],
+        PCS: ['PIECE', 'PCS', 'EACH', 'EA'],
+        EA: ['PIECE', 'PCS', 'EACH', 'EA'],
+        PL: ['PALLET', 'PLT'],
+        PALLET: ['PALLET', 'PLT'],
+    };
+
+    const targetNames = aliases[cleanHint] || [cleanHint];
+    const aliasMatch = product.uoms.find((u) =>
+        targetNames.some((alias) => u.name.toUpperCase().includes(alias))
+    );
+    if (aliasMatch) return aliasMatch;
+
+    const partialMatch = product.uoms.find((u) =>
+        u.name.toUpperCase().startsWith(cleanHint)
+    );
+    if (partialMatch) return partialMatch;
+
+    return [...product.uoms].sort((a, b) => b.conversion_factor - a.conversion_factor)[0];
 }
 
 export default function CreatePurchaseOrderPage({
@@ -362,8 +437,8 @@ export default function CreatePurchaseOrderPage({
     });
 
     // Add product & UOM to active order lines
-    const addProductToOrder = (product: Product, specificUom?: ProductUom, qty: number = 1) => {
-        const targetUom = specificUom || product.uoms?.[0];
+    const addProductToOrder = (product: Product, specificUom?: ProductUom, qty: number = 1, uomHint?: string) => {
+        const targetUom = specificUom || findMatchingUom(product, uomHint);
         if (!targetUom) {
             setScannerFeedback({
                 type: 'error',
@@ -401,7 +476,14 @@ export default function CreatePurchaseOrderPage({
                 product_uom_id: targetUom.id,
                 conversion_factor: targetUom.conversion_factor,
                 ordered_qty: qty,
-                unit_cost: targetUom.price_cents ? (targetUom.price_cents / 100).toFixed(2) : '100.00',
+                unit_cost: targetUom.price_cents !== null && targetUom.price_cents !== undefined
+                    ? (targetUom.price_cents / 100).toFixed(2)
+                    : (() => {
+                          const baseUom = product.uoms?.find((u) => u.is_base_unit || u.conversion_factor === 1);
+                          return baseUom?.price_cents
+                              ? ((baseUom.price_cents * targetUom.conversion_factor) / 100).toFixed(2)
+                              : '100.00';
+                      })(),
                 discount_type: 'PERCENTAGE',
                 discount_percent_formula: '0',
                 discount_fixed_amount: '0.00',
@@ -460,7 +542,7 @@ export default function CreatePurchaseOrderPage({
             (p) => p.sku.trim().toLowerCase() === query.toLowerCase()
         );
         if (exactSku) {
-            addProductToOrder(exactSku, undefined, effectiveQty);
+            addProductToOrder(exactSku, undefined, effectiveQty, parsed.uomHint);
             setPendingMultiplier(1);
             setScannerInput('');
             return;
@@ -472,7 +554,7 @@ export default function CreatePurchaseOrderPage({
                 catalogActiveIndex >= 0 && catalogActiveIndex < catalogFilteredProducts.length
                     ? catalogFilteredProducts[catalogActiveIndex]
                     : catalogFilteredProducts[0];
-            addProductToOrder(target, undefined, effectiveQty);
+            addProductToOrder(target, undefined, effectiveQty, parsed.uomHint);
             setPendingMultiplier(1);
             setScannerInput('');
         } else {
@@ -539,8 +621,13 @@ export default function CreatePurchaseOrderPage({
                 const uom = prod?.uoms?.find((u) => u.id === Number(partial.product_uom_id));
                 if (uom) {
                     updated.conversion_factor = uom.conversion_factor;
-                    if (uom.price_cents) {
+                    if (uom.price_cents !== null && uom.price_cents !== undefined) {
                         updated.unit_cost = (uom.price_cents / 100).toFixed(2);
+                    } else {
+                        const baseUom = prod?.uoms?.find((u) => u.is_base_unit || u.conversion_factor === 1);
+                        if (baseUom?.price_cents) {
+                            updated.unit_cost = ((baseUom.price_cents * uom.conversion_factor) / 100).toFixed(2);
+                        }
                     }
                 }
             }
@@ -615,36 +702,58 @@ export default function CreatePurchaseOrderPage({
 
         setIsSubmitting(true);
 
-        const poDiscountEffectivePercent =
-            financialTotals.subtotal > 0
-                ? (totalCombinedDiscounts / financialTotals.subtotal) * 100
-                : 0;
+        const payloadLines = lines.map((l) => {
+            const costCents = Math.round((parseFloat(l.unit_cost) || 0) * 100);
+            const { unitDiscount, effectivePct } = computeDiscount(
+                parseFloat(l.unit_cost) || 0,
+                l.discount_type,
+                l.discount_percent_formula,
+                l.discount_fixed_amount
+            );
+
+            const discountFormula =
+                l.discount_type === 'COMPOUND'
+                    ? `${l.discount_percent_formula || '0'}|${l.discount_fixed_amount || '0'}`
+                    : l.discount_type === 'FIXED_AMOUNT'
+                      ? l.discount_fixed_amount || '0'
+                      : l.discount_percent_formula || '0';
+
+            return {
+                product_id: l.product_id,
+                product_uom_id: l.product_uom_id,
+                ordered_qty: Math.max(1, l.ordered_qty || 1),
+                unit_cost_cents: costCents,
+                discount_type: l.discount_type,
+                discount_formula: discountFormula,
+                discount_percent: effectivePct,
+                discount_amount_cents: Math.round(unitDiscount * 100),
+            };
+        });
+
+        const validSteps = orderDiscountSteps
+            .filter((s) => (s.value || '').trim() !== '' && (parseFloat(s.value) || 0) > 0)
+            .map((s) => ({
+                type: s.type,
+                value: parseFloat(s.value) || 0,
+            }));
+
+        const orderDiscountType = validSteps.length > 0 ? 'PIPELINE' : 'PERCENTAGE';
+        const orderDiscountFormula = pipelineResult.formula || null;
+        const orderDiscountCents = Math.round(pipelineResult.totalDiscount * 100);
 
         const payload = {
-            supplier_id: orderSupplierId,
-            destination_location_id: orderLocationId,
+            supplier_id: Number(orderSupplierId),
+            destination_location_id: Number(orderLocationId),
             supplier_reference: supplierReference.trim() || null,
             order_date: orderDate,
             expected_delivery_date: expectedDeliveryDate || null,
             notes: orderNotes.trim() || null,
             tax_type: taxType,
-            lines: lines.map((l) => {
-                const grossUnitCost = Math.round(parseFloat(l.unit_cost) * 100);
-                const { effectivePct } = computeDiscount(
-                    parseFloat(l.unit_cost),
-                    l.discount_type,
-                    l.discount_percent_formula,
-                    l.discount_fixed_amount
-                );
-                return {
-                    product_id: l.product_id,
-                    product_uom_id: l.product_uom_id,
-                    ordered_qty: l.ordered_qty,
-                    unit_cost_cents: grossUnitCost,
-                    discount_percent: parseFloat((effectivePct * 100).toFixed(4)),
-                };
-            }),
-            po_discount_percent: parseFloat(poDiscountEffectivePercent.toFixed(4)),
+            order_discount_type: orderDiscountType,
+            order_discount_formula: orderDiscountFormula,
+            order_discount_steps: validSteps.length > 0 ? validSteps : null,
+            order_discount_cents: orderDiscountCents,
+            lines: payloadLines,
         };
 
         router.post('/procurement/orders', payload, {
@@ -867,10 +976,15 @@ export default function CreatePurchaseOrderPage({
                                         ) : (
                                             catalogFilteredProducts.map((p, idx) => {
                                                 const soh = getProductSoh(p, orderLocationId);
-                                                const defaultUom = p.uoms?.[0];
-                                                const unitCost = defaultUom?.price_cents
+                                                const defaultUom = findMatchingUom(p);
+                                                const unitCost = defaultUom?.price_cents !== null && defaultUom?.price_cents !== undefined
                                                     ? (defaultUom.price_cents / 100).toFixed(2)
-                                                    : '100.00';
+                                                    : (() => {
+                                                          const baseUom = p.uoms?.find((u) => u.is_base_unit || u.conversion_factor === 1);
+                                                          return baseUom?.price_cents
+                                                              ? ((baseUom.price_cents * (defaultUom?.conversion_factor || 1)) / 100).toFixed(2)
+                                                              : '100.00';
+                                                      })();
                                                 const isHighlighted = idx === catalogActiveIndex;
 
                                                 return (
@@ -1155,19 +1269,29 @@ export default function CreatePurchaseOrderPage({
                                                             </div>
                                                         </td>
                                                         <td className="px-3 py-2">
-                                                            <select
-                                                                value={line.product_uom_id}
-                                                                onChange={(e) =>
-                                                                    updateLine(idx, 'product_uom_id', Number(e.target.value))
-                                                                }
-                                                                className="h-8 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                                                            >
-                                                                {availableUoms.map((u) => (
-                                                                    <option key={u.id} value={u.id}>
-                                                                        {u.name} (x{u.conversion_factor})
-                                                                    </option>
-                                                                ))}
-                                                            </select>
+                                                            <div className="flex flex-wrap items-center gap-1">
+                                                                {availableUoms.map((u) => {
+                                                                    const isSelected = u.id === line.product_uom_id;
+                                                                    return (
+                                                                        <button
+                                                                            key={u.id}
+                                                                            type="button"
+                                                                            onClick={() => updateLine(idx, 'product_uom_id', u.id)}
+                                                                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
+                                                                                isSelected
+                                                                                    ? 'bg-brand text-white shadow-xs'
+                                                                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                                                                            }`}
+                                                                            title={`Packaging Unit: ${u.name} (Multiplier: x${u.conversion_factor})`}
+                                                                        >
+                                                                            <span>{u.name}</span>
+                                                                            <span className={`text-[10px] font-mono ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
+                                                                                (x{u.conversion_factor})
+                                                                            </span>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </td>
                                                         <td className="px-3 py-2 text-center">
                                                             <input
@@ -1211,6 +1335,11 @@ export default function CreatePurchaseOrderPage({
                                                                 }}
                                                                 className="h-8 w-20 text-right rounded-lg border border-slate-200 bg-white px-2 text-xs font-mono text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                                                             />
+                                                            {line.conversion_factor > 1 && (
+                                                                <div className="text-[10px] text-slate-400 font-mono mt-0.5 whitespace-nowrap text-right">
+                                                                    ≈ ₱{((parseFloat(line.unit_cost) || 0) / line.conversion_factor).toFixed(2)}/pc
+                                                                </div>
+                                                            )}
                                                         </td>
                                                         <td className="px-3 py-2">
                                                             <div className="flex items-center gap-1">

@@ -73,6 +73,14 @@ final class PurchaseOrder extends Model
     }
 
     /**
+     * @return BelongsTo<Location, $this>
+     */
+    public function destination_location(): BelongsTo
+    {
+        return $this->destinationLocation();
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function creator(): BelongsTo

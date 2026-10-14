@@ -43,6 +43,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/orders/create', [PurchaseOrderController::class, 'create'])->name('orders.create');
         Route::post('/orders', [PurchaseOrderController::class, 'store'])->name('orders.store');
         Route::get('/orders/{order}', [PurchaseOrderController::class, 'show'])->name('orders.show');
+        Route::get('/orders/{order}/edit', [PurchaseOrderController::class, 'edit'])->name('orders.edit');
+        Route::put('/orders/{order}', [PurchaseOrderController::class, 'update'])->name('orders.update');
 
         Route::get('/receiving', [GoodsReceiptController::class, 'index'])->name('receiving.index');
         Route::post('/receiving', [GoodsReceiptController::class, 'store'])->name('receiving.store');

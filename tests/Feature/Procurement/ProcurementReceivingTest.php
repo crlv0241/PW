@@ -8,6 +8,7 @@ use App\Models\Location;
 use App\Models\Product;
 use App\Models\ProductUom;
 use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderLine;
 use App\Models\Supplier;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -750,4 +751,149 @@ test('creates purchase order with supplier reference and supports search lookup'
     // Verify searchable on receiving index
     $grSearchResponse = $this->get('/procurement/receiving?search=SO-SUPPLIER-8891');
     $grSearchResponse->assertOk();
+});
+
+test('renders dedicated purchase order edit page with pre-populated order data', function () {
+    $po = PurchaseOrder::create([
+        'po_number' => 'PO-2026-TEST-EDIT',
+        'supplier_id' => $this->supplier->id,
+        'destination_location_id' => $this->warehouse->id,
+        'status' => 'APPROVED',
+        'tax_type' => 'NON_VAT',
+        'order_date' => '2026-10-14',
+        'subtotal_cents' => 50000,
+        'line_discount_cents' => 0,
+        'order_discount_cents' => 0,
+        'discount_cents' => 0,
+        'tax_cents' => 0,
+        'total_cents' => 50000,
+    ]);
+
+    PurchaseOrderLine::create([
+        'purchase_order_id' => $po->id,
+        'product_id' => $this->product->id,
+        'product_uom_id' => $this->baseUom->id,
+        'ordered_qty' => 5,
+        'conversion_factor' => 1,
+        'ordered_base_qty' => 5,
+        'unit_cost_cents' => 10000,
+        'discount_type' => 'PERCENTAGE',
+        'discount_percent' => '0.0000',
+        'discount_amount_cents' => 0,
+        'net_unit_cost_cents' => 10000,
+        'net_base_cost_cents' => 10000,
+        'line_total_cents' => 50000,
+        'received_base_qty' => 0,
+    ]);
+
+    $response = $this->get("/procurement/orders/{$po->id}/edit");
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('procurement/orders/edit')
+            ->where('order.id', $po->id)
+            ->where('order.po_number', 'PO-2026-TEST-EDIT')
+            ->has('suppliers')
+            ->has('locations')
+            ->has('products')
+        );
+});
+
+test('updates purchase order lines, quantities, and applies overall discount pipeline', function () {
+    $po = PurchaseOrder::create([
+        'po_number' => 'PO-2026-TEST-UPDATE',
+        'supplier_id' => $this->supplier->id,
+        'destination_location_id' => $this->warehouse->id,
+        'status' => 'APPROVED',
+        'tax_type' => 'NON_VAT',
+        'order_date' => '2026-10-14',
+        'subtotal_cents' => 100000,
+        'line_discount_cents' => 0,
+        'order_discount_cents' => 0,
+        'discount_cents' => 0,
+        'tax_cents' => 0,
+        'total_cents' => 100000,
+    ]);
+
+    PurchaseOrderLine::create([
+        'purchase_order_id' => $po->id,
+        'product_id' => $this->product->id,
+        'product_uom_id' => $this->baseUom->id,
+        'ordered_qty' => 10,
+        'conversion_factor' => 1,
+        'ordered_base_qty' => 10,
+        'unit_cost_cents' => 10000,
+        'discount_type' => 'PERCENTAGE',
+        'discount_percent' => '0.0000',
+        'discount_amount_cents' => 0,
+        'net_unit_cost_cents' => 10000,
+        'net_base_cost_cents' => 10000,
+        'line_total_cents' => 100000,
+        'received_base_qty' => 0,
+    ]);
+
+    // Update with 10% then ₱500 discount pipeline
+    $payload = [
+        'supplier_id' => $this->supplier->id,
+        'destination_location_id' => $this->warehouse->id,
+        'supplier_reference' => 'SO-UPDATED-99',
+        'order_date' => '2026-10-15',
+        'tax_type' => 'NON_VAT',
+        'order_discount_type' => 'PIPELINE',
+        'order_discount_steps' => [
+            ['type' => 'PERCENT', 'value' => 10],
+            ['type' => 'FIXED', 'value' => 500],
+        ],
+        'lines' => [
+            [
+                'product_id' => $this->product->id,
+                'product_uom_id' => $this->baseUom->id,
+                'ordered_qty' => 10,
+                'unit_cost_cents' => 10000,
+            ],
+        ],
+    ];
+
+    $response = $this->put("/procurement/orders/{$po->id}", $payload);
+    $response->assertRedirect('/procurement/orders');
+
+    $po->refresh();
+    expect($po->supplier_reference)->toBe('SO-UPDATED-99');
+    expect($po->subtotal_cents)->toBe(100000);
+    expect($po->order_discount_cents)->toBe(60000);
+    expect($po->total_cents)->toBe(40000);
+    expect($po->order_discount_formula)->toBe('10% → ₱500.00');
+});
+
+test('prevents updating a completed purchase order', function () {
+    $po = PurchaseOrder::create([
+        'po_number' => 'PO-2026-COMPLETED',
+        'supplier_id' => $this->supplier->id,
+        'destination_location_id' => $this->warehouse->id,
+        'status' => 'COMPLETED',
+        'tax_type' => 'NON_VAT',
+        'order_date' => '2026-10-14',
+        'subtotal_cents' => 100000,
+        'line_discount_cents' => 0,
+        'order_discount_cents' => 0,
+        'discount_cents' => 0,
+        'tax_cents' => 0,
+        'total_cents' => 100000,
+    ]);
+
+    $payload = [
+        'supplier_id' => $this->supplier->id,
+        'destination_location_id' => $this->warehouse->id,
+        'order_date' => '2026-10-15',
+        'lines' => [
+            [
+                'product_id' => $this->product->id,
+                'product_uom_id' => $this->baseUom->id,
+                'ordered_qty' => 5,
+                'unit_cost_cents' => 10000,
+            ],
+        ],
+    ];
+
+    $response = $this->put("/procurement/orders/{$po->id}", $payload);
+    $response->assertSessionHasErrors('order');
 });
