@@ -89,6 +89,41 @@ final class PurchaseOrderController extends Controller
     }
 
     /**
+     * Show the dedicated high-throughput purchase order creation workspace.
+     */
+    public function create(): Response
+    {
+        $suppliers = Supplier::query()
+            ->where('is_active', true)
+            ->select('id', 'supplier_code', 'name')
+            ->orderBy('name')
+            ->get();
+
+        $locations = Location::query()
+            ->where('is_active', true)
+            ->whereIn('type', ['warehouse', 'damage'])
+            ->select('id', 'code', 'name', 'type')
+            ->orderBy('name')
+            ->get();
+
+        $products = Product::query()
+            ->where('status', 'ACTIVE')
+            ->with([
+                'uoms:id,product_id,name,conversion_factor,is_base_unit,barcode,price_cents',
+                'balances:id,product_id,location_id,current_qty',
+            ])
+            ->select('id', 'sku', 'name', 'category')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('procurement/orders/create', [
+            'suppliers' => $suppliers,
+            'locations' => $locations,
+            'products' => $products,
+        ]);
+    }
+
+    /**
      * Store a newly created purchase order with Fowler-allocated line item amounts.
      */
     public function store(StorePurchaseOrderRequest $request, CreatePurchaseOrderAction $createPo): RedirectResponse
@@ -115,7 +150,7 @@ final class PurchaseOrderController extends Controller
          */
         $po = $createPo->execute($validated);
 
-        return back()->with('success', sprintf('Purchase Order %s generated successfully.', $po->po_number));
+        return redirect()->route('procurement.orders.index')->with('success', sprintf('Purchase Order %s generated successfully.', $po->po_number));
     }
 
     /**

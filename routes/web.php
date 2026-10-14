@@ -40,6 +40,7 @@ Route::middleware('auth')->group(function () {
     // Procurement & Inbound Receiving (WMS)
     Route::prefix('procurement')->name('procurement.')->group(function () {
         Route::get('/orders', [PurchaseOrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/create', [PurchaseOrderController::class, 'create'])->name('orders.create');
         Route::post('/orders', [PurchaseOrderController::class, 'store'])->name('orders.store');
         Route::get('/orders/{order}', [PurchaseOrderController::class, 'show'])->name('orders.show');
 

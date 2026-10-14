@@ -74,6 +74,18 @@ test('renders purchase orders index page with Inertia', function () {
         );
 });
 
+test('renders dedicated purchase order create page with Inertia', function () {
+    $response = $this->get('/procurement/orders/create');
+
+    $response->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('procurement/orders/create')
+            ->has('suppliers')
+            ->has('locations')
+            ->has('products')
+        );
+});
+
 test('creates purchase order with multi-uom conversion and integer penny amounts', function () {
     $payload = [
         'supplier_id' => $this->supplier->id,

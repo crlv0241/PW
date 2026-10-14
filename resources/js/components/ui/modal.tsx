@@ -12,7 +12,8 @@ interface ModalProps {
     onConfirm?: () => void;
     isLoading?: boolean;
     isDestructive?: boolean;
-    maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl';
+    maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '5xl' | '6xl' | '7xl' | 'full';
+    bodyClassName?: string;
 }
 
 export function Modal({
@@ -27,6 +28,7 @@ export function Modal({
     isLoading = false,
     isDestructive = false,
     maxWidth = 'lg',
+    bodyClassName,
 }: ModalProps) {
     const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -59,6 +61,8 @@ export function Modal({
         '4xl': 'max-w-4xl',
         '5xl': 'max-w-5xl',
         '6xl': 'max-w-6xl',
+        '7xl': 'max-w-7xl',
+        full: 'max-w-[96vw]',
     };
 
     return (
@@ -77,16 +81,16 @@ export function Modal({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="modal-title"
-                className={`relative w-full ${maxWidthClasses[maxWidth]} overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all dark:border-slate-800 dark:bg-slate-900`}
+                className={`relative w-full ${maxWidthClasses[maxWidth]} max-h-[94vh] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl transition-all dark:border-slate-800 dark:bg-slate-900`}
             >
                 {/* Header */}
-                <div className="flex items-start justify-between border-b border-slate-100 p-5 dark:border-slate-800">
+                <div className="shrink-0 flex items-start justify-between border-b border-slate-100 px-5 py-3.5 dark:border-slate-800">
                     <div>
                         <h3 id="modal-title" className="text-base font-semibold text-slate-900 dark:text-slate-100">
                             {title}
                         </h3>
                         {description && (
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                                 {description}
                             </p>
                         )}
@@ -102,7 +106,7 @@ export function Modal({
                 </div>
 
                 {/* Body */}
-                <div className="max-h-[75vh] overflow-y-auto p-5">
+                <div className={bodyClassName || "max-h-[75vh] overflow-y-auto p-5"}>
                     {children}
                 </div>
 

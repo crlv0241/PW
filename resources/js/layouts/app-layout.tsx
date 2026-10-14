@@ -57,9 +57,10 @@ interface AppLayoutProps {
     description?: string;
     breadcrumbs?: { label: string; href?: string }[];
     actions?: React.ReactNode;
+    contentClassName?: string;
 }
 
-export function AppLayout({ children, title, eyebrow, description, breadcrumbs, actions }: AppLayoutProps) {
+export function AppLayout({ children, title, eyebrow, description, breadcrumbs, actions, contentClassName }: AppLayoutProps) {
     const page = usePage<SharedProps>();
     const { auth, branding, flash } = page.props;
     const currentUrl = page.url;
@@ -338,7 +339,11 @@ export function AppLayout({ children, title, eyebrow, description, breadcrumbs, 
             {/* Main Application Area */}
             <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
                 {/* Top Control Bar */}
-                <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-4 sm:px-6 lg:px-8 dark:border-slate-800/80 dark:bg-slate-900/80">
+                <header
+                    className={`sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-4 sm:px-6 lg:px-8 dark:border-slate-800/80 dark:bg-slate-900/80 ${
+                        !breadcrumbs ? 'lg:hidden' : ''
+                    }`}
+                >
                     {/* Left: Mobile Toggle & Breadcrumbs */}
                     <div className="flex items-center gap-3">
                         <button
@@ -414,7 +419,7 @@ export function AppLayout({ children, title, eyebrow, description, breadcrumbs, 
                 )}
 
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
+                <main className={contentClassName ?? 'flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8'}>
                     {children}
                 </main>
             </div>
