@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
     // Catalog & Products
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::post('/products', [ProductController::class, 'store'])->name('products.store');
+    Route::put('/products/{product}', [ProductController::class, 'update'])->name('products.update');
+    Route::patch('/products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])->name('products.toggle-status');
 
     // Inventory & Ledger Management
     Route::prefix('inventory')->name('inventory.')->group(function () {

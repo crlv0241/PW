@@ -20,6 +20,7 @@ export interface Product {
     tax_rate: string;
     description: string | null;
     uoms: ProductUom[];
+    total_stock?: number | string | null;
     balances?: InventoryBalance[];
     created_at: string;
     updated_at: string;

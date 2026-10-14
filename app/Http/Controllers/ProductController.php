@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers;
 
+use App\Actions\Product\CreateProductAction;
+use App\Actions\Product\UpdateProductAction;
 use App\Http\Requests\StoreProductRequest;
+use App\Http\Requests\UpdateProductRequest;
 use App\Models\Product;
-use App\Models\ProductUom;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -30,10 +31,14 @@ final class ProductController extends Controller
             ->with(['uoms' => function ($query) {
                 $query->orderBy('conversion_factor', 'asc');
             }])
+            ->withSum('balances as total_stock', 'current_qty')
             ->when($search, function ($query, string $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('sku', 'like', "%{$search}%")
-                        ->orWhere('name', 'like', "%{$search}%");
+                        ->orWhere('name', 'like', "%{$search}%")
+                        ->orWhereHas('uoms', function ($uomQuery) use ($search) {
+                            $uomQuery->where('barcode', 'like', "%{$search}%");
+                        });
                 });
             })
             ->when($category, function ($query, string $category) {
@@ -59,29 +64,69 @@ final class ProductController extends Controller
     }
 
     /**
-     * Store a newly created product with its base UOM.
+     * Store a newly created product with its packaging units.
      */
-    public function store(StoreProductRequest $request): RedirectResponse
+    public function store(StoreProductRequest $request, CreateProductAction $action): RedirectResponse
     {
-        DB::transaction(function () use ($request) {
-            $product = Product::create([
-                'sku' => $request->validated('sku'),
-                'name' => $request->validated('name'),
-                'category' => $request->validated('category'),
-                'tax_category' => $request->validated('tax_category'),
-                'tax_rate' => $request->validated('tax_rate'),
-                'description' => $request->validated('description'),
-            ]);
+        /** @var array{
+         *     sku: string,
+         *     name: string,
+         *     category: string,
+         *     status?: string,
+         *     tax_category: string,
+         *     tax_rate: float|string,
+         *     description?: string|null,
+         *     uoms: list<array{
+         *         name: string,
+         *         conversion_factor: int,
+         *         barcode?: string|null,
+         *         is_base_unit: bool,
+         *         price_cents?: int|null
+         *     }>
+         * } $data */
+        $data = $request->validated();
 
-            ProductUom::create([
-                'product_id' => $product->id,
-                'name' => $request->validated('base_uom_name'),
-                'conversion_factor' => 1,
-                'barcode' => $request->validated('base_uom_barcode'),
-                'is_base_unit' => true,
-                'price_cents' => $request->validated('base_uom_price_cents'),
-            ]);
-        });
+        $action->execute($data);
+
+        return redirect()->route('products.index');
+    }
+
+    /**
+     * Update an existing product and its packaging units.
+     */
+    public function update(UpdateProductRequest $request, Product $product, UpdateProductAction $action): RedirectResponse
+    {
+        /** @var array{
+         *     sku: string,
+         *     name: string,
+         *     category: string,
+         *     status?: string,
+         *     tax_category: string,
+         *     tax_rate: float|string,
+         *     description?: string|null,
+         *     uoms: list<array{
+         *         id?: int|null,
+         *         name: string,
+         *         conversion_factor: int,
+         *         barcode?: string|null,
+         *         is_base_unit: bool,
+         *         price_cents?: int|null
+         *     }>
+         * } $data */
+        $data = $request->validated();
+
+        $action->execute($product, $data);
+
+        return redirect()->route('products.index');
+    }
+
+    /**
+     * Toggle the active/inactive status of a product.
+     */
+    public function toggleStatus(Product $product): RedirectResponse
+    {
+        $newStatus = $product->status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+        $product->update(['status' => $newStatus]);
 
         return redirect()->route('products.index');
     }
