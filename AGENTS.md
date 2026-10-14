@@ -42,6 +42,7 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 - **NEVER EDIT COMMITTED MIGRATIONS**: Always create a new sequential migration to alter schemas.
 - **NEVER WRITE UNPARAMETERIZED RAW SQL**: Always use Eloquent query builder or parameterized bindings (`DB::raw('...', [$val])`).
 - **NEVER INCLUDE IRRELEVANT MARKETING PHRASES OR JARGON**: Do not display buzzwords, slogans, or technical marketing filler in UI, headers, cards, or badges (e.g. "Enterprise Core v1.0", "ACID Compliant...", "Ledger Synchronized", "NextGen OS"). Use only concise, domain-specific descriptions and icons that describe actions specifically and only when truly needed.
+- **NEVER INTRODUCE UNLINKED, ORPHANED, OR UNINDEXED SCHEMA CHANGES**: When updating or creating database schemas, always enforce explicit foreign keys (`constrained()`, `cascadeOnDelete()` only for owned child rows or `restrictOnDelete()` for master/ledger/financial records). No record may ever be unlinked or created without linked parent data. All foreign keys, filter predicates, and date ranges must be indexed. Uniqueness and constraints must be enforced at the database engine level.
 - **NEVER SPAWN OR RUN AUTOMATED BROWSER SUBAGENTS FOR BROWSER TESTING**: The USER prefers to conduct all manual browser and UI testing personally. NEVER invoke automated browser subagents or open browser sessions automatically. Instead, verify builds statically and via automated tests (`npm run build`, `npm run types:check`, `vendor/bin/pest`, `vendor/bin/phpstan analyse`), ensure dev servers are operational, and provide clear, step-by-step testing instructions, URLs, credentials, and verification flows for the user to test manually.
 
 *Detailed rule files: [`.agents/rules/`](.agents/rules/)*
@@ -50,6 +51,7 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 
 ## 4. System Invariants & Domain Rules
 - **Conservation of Value & Money**: Money is never created or destroyed. Invoices strictly satisfy $\sum \text{line\_totals} \equiv \text{invoice.grand\_total}$. Historical invoice lines snapshot unit prices, costs, discounts, and taxes immutably.
+- **Relational Integrity & Schema Maintainability**: All database tables must maintain strict referential integrity. No data may ever be created or unlinked without parent relationships. All schema updates must assess whole-database table connections, join performance (`EXPLAIN`), index cardinality, and migration maintainability.
 - **Lowest-Common-Denominator Atomicity**: All inventory is stored, transferred, and calculated in whole integer base units (pieces/eaches). Multi-UOM conversions (`product_uoms`) must resolve to integers.
 - **Write-Ahead Ledger & Balance Cache**: Physical movements write append-only, immutable rows to `inventory_ledgers` and synchronously update `inventory_balances`.
 - **Clean Architecture & SOLID**: Thin controllers, single-action domain classes (`app/Actions`), models focused on relationships/casts/scopes. Guard clauses and early returns over nested conditionals.
@@ -65,20 +67,20 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 
 ---
 
-## 6. Domain Skills Activation (Progressive Disclosure)
-Activate the corresponding skill in `.agents/skills/` when working in that domain:
-- `financial-engineering`: Money value objects, `BcMath\Number`, Fowler penny allocation, double-entry AR, tax reconciliation, cash shifts.
-- `table-engineering`: Server-side pagination, debounced multi-column filters, URL query sync, skeleton rows.
-- `dropdown-engineering`: Searchable single-select combobox, searchable multi-select with badges, accessible confirmation modals.
-- `frontend-senior-engineer`: UI components, React/Inertia, barcode keystroke buffer, offline queue UX, smooth gradients.
-- `backend-senior-engineer`: Single-action domain classes, Form Requests, Redis queues, idempotent sync, RFC 7807 error envelopes.
-- `senior-database-engineer`: MySQL 8 schemas, migrations, ledger tables, balance caches, pessimistic locking (`lockForUpdate`).
-- `clean-code-architecture`: SOLID principles, domain layering, strongly-typed DTOs, guard clauses, naming conventions.
-- `security-engineering`: Sanctum authentication, granular RBAC policies, HMAC sync signatures, anti-replay checks, encrypted casts.
-- `maintainability-and-upgradability`: Automated Pest invariant tests, Larastan Level 8+, Pint formatting, backward-compatible API contracts.
-- `inertia-react-development`: Inertia v3 React patterns, `useHttp`, forms, instant visits.
-- `wayfinder-development`: Type-safe route calls via Laravel Wayfinder (`@/actions/`, `@/routes/`).
-- `laravel-best-practices`: Eloquent performance, cache tags, event listeners, jobs.
+## 6. Mandatory Domain Skills Activation (Progressive Disclosure)
+Whenever a task touches any of the following domains, the corresponding skill in `.agents/skills/` **MUST BE ACTIVATED AND ADHERED TO WITHOUT EXCEPTION** before planning, writing, or modifying code:
+- `financial-engineering`: **MANDATORY** for monetary calculations, currency storage, `BcMath\Number`, Fowler penny allocation, pricing tiers, discounts, taxes, AR ledgers, and cash shifts.
+- `senior-database-engineer`: **MANDATORY** for database schemas, migrations, table connections, referential foreign keys, composite indexes, query performance (`EXPLAIN`), ledger tables, balance caches, and pessimistic locks (`lockForUpdate`).
+- `table-engineering`: **MANDATORY** for data tables, server-side pagination, debounced multi-column filters, URL query syncing, sort states, and skeleton rows.
+- `dropdown-engineering`: **MANDATORY** for single-select comboboxes, searchable multi-selects with badges, and accessible confirmation modal dialogs.
+- `frontend-senior-engineer`: **MANDATORY** for React/Inertia UI components, form layouts, barcode scanner keystroke buffers, offline queues, and professional typography.
+- `backend-senior-engineer`: **MANDATORY** for single-action domain classes (`app/Actions`), Form Requests, Redis queues, idempotent sync, and RFC 7807 error envelopes.
+- `clean-code-architecture`: **MANDATORY** for domain structuring, SOLID principles, strongly-typed DTOs, guard clauses, and decoupled architecture.
+- `security-engineering`: **MANDATORY** for Sanctum authentication, granular RBAC policies, HMAC sync signatures, anti-replay checks, and sensitive data protection.
+- `maintainability-and-upgradability`: **MANDATORY** for automated Pest invariant tests, Larastan Level 8+, Pint formatting, and backward-compatible API contracts.
+- `inertia-react-development`: **MANDATORY** for Inertia v3 React client patterns, `useHttp`, forms, deferred props, and instant visits.
+- `wayfinder-development`: **MANDATORY** for type-safe route calls via Laravel Wayfinder (`@/actions/`, `@/routes/`).
+- `laravel-best-practices`: **MANDATORY** for Eloquent optimization, cache tags, event listeners, jobs, and query performance.
 
 ---
 

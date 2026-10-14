@@ -12,6 +12,7 @@ MySQL 8 schema architecture, transactional concurrency, and indexing standards f
 2. **UOM Atomicity**: Store, calculate, and transfer all stock in the lowest base unit (integer pieces/eaches).
 3. **Deadlock Prevention**: Sort item IDs ascending before calling `lockForUpdate()`.
 4. **Data Types**: `DECIMAL(14, 4)` for money/prices, `INT` for base inventory, `CHAR(36)` for UUIDs.
+5. **Relational Integrity & Zero Unlinked Data**: Every table relationship must be strictly constrained (`constrained()`, `foreignId()`). Child records must never exist without parents; transactional/ledger references must use `restrictOnDelete()` to prevent severed connections. Every foreign key and filter predicate must be indexed for query performance and maintainability.
 
 ## Reference Index
 Consult only the relevant reference file for your current task:
