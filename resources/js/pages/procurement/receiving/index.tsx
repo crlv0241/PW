@@ -160,6 +160,9 @@ export default function GoodsReceivingIndex({
         if (po) {
             setSelectedSupplierId(String(po.supplier_id));
             setSelectedLocationId(String(po.destination_location_id));
+            if (po.supplier_reference && !supplierInvoiceNumber) {
+                setSupplierInvoiceNumber(po.supplier_reference);
+            }
         }
     };
 
@@ -496,8 +499,15 @@ export default function GoodsReceivingIndex({
                                             </td>
                                             <td className="px-4 py-3">
                                                 {gr.purchaseOrder ? (
-                                                    <div className="font-mono text-xs font-medium text-brand">
-                                                        {gr.purchaseOrder.po_number}
+                                                    <div className="flex flex-col">
+                                                        <span className="font-mono text-xs font-medium text-brand">
+                                                            {gr.purchaseOrder.po_number}
+                                                        </span>
+                                                        {gr.purchaseOrder.supplier_reference && (
+                                                            <span className="font-mono text-[10px] text-slate-500">
+                                                                Ref: {gr.purchaseOrder.supplier_reference}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <span className="text-xs text-slate-400 italic">None (Direct)</span>
@@ -595,10 +605,13 @@ export default function GoodsReceivingIndex({
                                     { value: '', label: 'None (Direct Inbound)' },
                                     ...openPurchaseOrders.map((po) => ({
                                         value: String(po.id),
-                                        label: `${po.po_number} - ${po.supplier?.name}`,
+                                        label: `${po.po_number}${po.supplier_reference ? ` [Ref: ${po.supplier_reference}]` : ''} - ${po.supplier?.name}`,
+                                        description: po.supplier_reference
+                                            ? `Supplier Ref/Invoice: ${po.supplier_reference} • ${po.supplier?.name}`
+                                            : po.supplier?.name,
                                     })),
                                 ]}
-                                placeholder="Link open PO..."
+                                placeholder="Search by PO# or Supplier Ref/Inv..."
                             />
                         </div>
 
@@ -913,7 +926,12 @@ export default function GoodsReceivingIndex({
                                         <span>1. Purchase Order</span>
                                     </div>
                                     <div className="font-mono text-xs text-slate-500">
-                                        {selectedReceiptForAudit.purchaseOrder?.po_number || 'Direct Inbound'}
+                                        <div>{selectedReceiptForAudit.purchaseOrder?.po_number || 'Direct Inbound'}</div>
+                                        {selectedReceiptForAudit.purchaseOrder?.supplier_reference && (
+                                            <div className="text-[10px] text-slate-400">
+                                                Ref: {selectedReceiptForAudit.purchaseOrder.supplier_reference}
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="pt-1">
                                         <div className="text-[11px] text-slate-400">Ordered Base Units:</div>

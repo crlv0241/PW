@@ -18,6 +18,7 @@ final class PurchaseOrder extends Model
      */
     protected $fillable = [
         'po_number',
+        'supplier_reference',
         'supplier_id',
         'destination_location_id',
         'status',

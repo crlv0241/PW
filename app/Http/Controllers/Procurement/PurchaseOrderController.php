@@ -39,6 +39,7 @@ final class PurchaseOrderController extends Controller
             ->when($search, function ($query, string $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('po_number', 'like', "%{$search}%")
+                        ->orWhere('supplier_reference', 'like', "%{$search}%")
                         ->orWhereHas('supplier', function ($sq) use ($search) {
                             $sq->where('name', 'like', "%{$search}%")
                                 ->orWhere('supplier_code', 'like', "%{$search}%");
@@ -98,6 +99,7 @@ final class PurchaseOrderController extends Controller
         /** @var array{
          *     supplier_id: int,
          *     destination_location_id: int,
+         *     supplier_reference?: string|null,
          *     order_date: string,
          *     expected_delivery_date?: string|null,
          *     notes?: string|null,

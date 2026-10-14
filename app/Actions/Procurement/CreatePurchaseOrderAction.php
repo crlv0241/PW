@@ -17,6 +17,7 @@ final class CreatePurchaseOrderAction
      * @param array{
      *     supplier_id: int,
      *     destination_location_id: int,
+     *     supplier_reference?: string|null,
      *     order_date: string,
      *     expected_delivery_date?: string|null,
      *     tax_type?: string|null,
@@ -350,6 +351,9 @@ final class CreatePurchaseOrderAction
 
             $purchaseOrder = PurchaseOrder::create([
                 'po_number' => $poNumber,
+                'supplier_reference' => isset($data['supplier_reference']) && trim((string) $data['supplier_reference']) !== ''
+                    ? trim((string) $data['supplier_reference'])
+                    : null,
                 'supplier_id' => $data['supplier_id'],
                 'destination_location_id' => $data['destination_location_id'],
                 'status' => 'APPROVED',

@@ -21,6 +21,7 @@ final class StorePurchaseOrderRequest extends FormRequest
         return [
             'supplier_id' => ['required', 'integer', 'exists:suppliers,id'],
             'destination_location_id' => ['required', 'integer', 'exists:locations,id'],
+            'supplier_reference' => ['nullable', 'string', 'max:64'],
             'order_date' => ['required', 'date'],
             'expected_delivery_date' => ['nullable', 'date', 'after_or_equal:order_date'],
             'tax_type' => ['nullable', 'string', 'in:VAT_EXCLUSIVE,VAT_INCLUSIVE,NON_VAT'],

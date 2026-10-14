@@ -33,7 +33,7 @@ final class GoodsReceiptController extends Controller
             ->with([
                 'supplier:id,supplier_code,name',
                 'location:id,code,name',
-                'purchaseOrder:id,po_number,total_cents,status',
+                'purchaseOrder:id,po_number,supplier_reference,total_cents,status',
                 'receiver:id,name',
                 'lines.product:id,sku,name',
                 'lines.uom:id,name,conversion_factor,barcode',
@@ -42,7 +42,7 @@ final class GoodsReceiptController extends Controller
                 $query->where(function ($q) use ($search) {
                     $q->where('gr_number', 'like', "%{$search}%")
                         ->orWhere('supplier_invoice_number', 'like', "%{$search}%")
-                        ->orWhereHas('purchaseOrder', fn ($pq) => $pq->where('po_number', 'like', "%{$search}%"))
+                        ->orWhereHas('purchaseOrder', fn ($pq) => $pq->where('po_number', 'like', "%{$search}%")->orWhere('supplier_reference', 'like', "%{$search}%"))
                         ->orWhereHas('supplier', fn ($sq) => $sq->where('name', 'like', "%{$search}%"));
                 });
             })

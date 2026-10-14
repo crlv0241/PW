@@ -283,6 +283,7 @@ export default function PurchaseOrdersIndex({
         });
     };
     const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>('');
+    const [supplierReference, setSupplierReference] = useState<string>('');
     const [orderNotes, setOrderNotes] = useState<string>('');
     const [lines, setLines] = useState<NewPoLineItem[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -298,6 +299,7 @@ export default function PurchaseOrdersIndex({
     useEffect(() => {
         if (isCreateOpen) {
             setLines([]);
+            setSupplierReference('');
             setScannerInput('');
             setScannerFeedback(null);
             setIsSearchOpen(false);
@@ -653,6 +655,7 @@ export default function PurchaseOrdersIndex({
             {
                 supplier_id: Number(orderSupplierId),
                 destination_location_id: Number(orderLocationId),
+                supplier_reference: supplierReference.trim() || null,
                 tax_type: taxType,
                 order_discount_type: orderDiscountType,
                 order_discount_formula: orderDiscountFormula,
@@ -842,13 +845,20 @@ export default function PurchaseOrdersIndex({
                                                 className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
                                             >
                                                 <td className="px-4 py-3 font-medium">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                                                            {po.po_number}
-                                                        </span>
-                                                        {po.lines && (
-                                                            <span className="text-[11px] text-slate-400">
-                                                                ({po.lines.length} lines)
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                                                {po.po_number}
+                                                            </span>
+                                                            {po.lines && (
+                                                                <span className="text-[11px] text-slate-400">
+                                                                    ({po.lines.length} lines)
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {po.supplier_reference && (
+                                                            <span className="font-mono text-[10px] text-slate-500">
+                                                                Ref: {po.supplier_reference}
                                                             </span>
                                                         )}
                                                     </div>
@@ -960,7 +970,7 @@ export default function PurchaseOrdersIndex({
             >
                 <form onSubmit={handleCreateSubmit} className="space-y-4">
                     {/* Top Order Information Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-5 gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
                         <div>
                             <label className="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
                                 Supplier
@@ -988,6 +998,19 @@ export default function PurchaseOrdersIndex({
                                     label: `${loc.code} - ${loc.name}`,
                                 }))}
                                 placeholder="Select warehouse..."
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                Supplier Ref / Order # (Optional)
+                            </label>
+                            <input
+                                type="text"
+                                value={supplierReference}
+                                onChange={(e) => setSupplierReference(e.target.value)}
+                                placeholder="e.g. SO-8942 / Pre-Invoice"
+                                className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:border-brand focus:outline-hidden focus:ring-2 focus:ring-brand/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
                             />
                         </div>
 
@@ -1729,11 +1752,17 @@ export default function PurchaseOrdersIndex({
                     maxWidth="5xl"
                 >
                     <div className="space-y-4 text-xs">
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-2 bg-slate-50 dark:bg-slate-950 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
                             <div>
                                 <span className="text-slate-400 block text-[11px]">Supplier Code</span>
                                 <span className="font-mono font-medium text-slate-800 dark:text-slate-200">
                                     {selectedOrder.supplier?.supplier_code}
+                                </span>
+                            </div>
+                            <div>
+                                <span className="text-slate-400 block text-[11px]">Supplier Reference</span>
+                                <span className="font-mono font-medium text-slate-800 dark:text-slate-200">
+                                    {selectedOrder.supplier_reference || '-'}
                                 </span>
                             </div>
                             <div>

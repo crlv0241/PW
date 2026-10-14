@@ -703,3 +703,39 @@ test('creates purchase order with different sequence producing different payable
     // Verified ₱10.00 difference proving execution sequence sensitivity
     expect($po->total_cents)->not->toBe(833000);
 });
+
+test('creates purchase order with supplier reference and supports search lookup', function () {
+    $payload = [
+        'supplier_id' => $this->supplier->id,
+        'destination_location_id' => $this->warehouse->id,
+        'supplier_reference' => 'SO-SUPPLIER-8891',
+        'order_date' => '2026-10-14',
+        'lines' => [
+            [
+                'product_id' => $this->product->id,
+                'product_uom_id' => $this->baseUom->id,
+                'ordered_qty' => 5,
+                'unit_cost_cents' => 2500,
+            ],
+        ],
+    ];
+
+    $response = $this->post('/procurement/orders', $payload);
+    $response->assertRedirect();
+
+    $po = PurchaseOrder::query()->where('supplier_reference', 'SO-SUPPLIER-8891')->first();
+    expect($po)->not->toBeNull();
+    expect($po->supplier_reference)->toBe('SO-SUPPLIER-8891');
+
+    // Verify searchable on orders index
+    $searchResponse = $this->get('/procurement/orders?search=SO-SUPPLIER-8891');
+    $searchResponse->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('orders.data', 1)
+            ->where('orders.data.0.supplier_reference', 'SO-SUPPLIER-8891')
+        );
+
+    // Verify searchable on receiving index
+    $grSearchResponse = $this->get('/procurement/receiving?search=SO-SUPPLIER-8891');
+    $grSearchResponse->assertOk();
+});

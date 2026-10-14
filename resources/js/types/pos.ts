@@ -136,6 +136,7 @@ export interface PurchaseOrderLine {
 export interface PurchaseOrder {
     id: number;
     po_number: string;
+    supplier_reference?: string | null;
     supplier_id: number;
     destination_location_id: number;
     status: 'DRAFT' | 'APPROVED' | 'PARTIALLY_RECEIVED' | 'COMPLETED' | 'CANCELLED';
