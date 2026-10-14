@@ -77,24 +77,25 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
 
     return (
         <AppLayout
-            title="Write-Ahead Inventory Movement Ledger"
+            title="Movement Ledger"
+            description="Audit log of inventory intake, transfers, sales, and adjustments."
             breadcrumbs={[
                 { label: 'Back Office', href: '/products' },
                 { label: 'Inventory', href: '/inventory' },
-                { label: 'Ledger Audit Log' },
+                { label: 'Movement Ledger' },
             ]}
         >
-            <Head title="Ledger Audit Log - POS & WMS" />
+            <Head title="Movement Ledger - POS & WMS" />
 
             {/* Top Toolbar */}
-            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
                 {/* Location Filter */}
                 <div className="w-full sm:w-60">
                     <Combobox
                         options={locationOptions}
                         value={locationId}
                         onChange={(val) => handleFilterChange(val, productId, type)}
-                        placeholder="Filter by Location..."
+                        placeholder="All Locations"
                     />
                 </div>
 
@@ -104,7 +105,7 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                         options={productOptions}
                         value={productId}
                         onChange={(val) => handleFilterChange(locationId, val, type)}
-                        placeholder="Filter by Product..."
+                        placeholder="All Products"
                     />
                 </div>
 
@@ -114,7 +115,7 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                         options={typeOptions}
                         value={type}
                         onChange={(val) => handleFilterChange(locationId, productId, val)}
-                        placeholder="Movement Type..."
+                        placeholder="All Movement Types"
                     />
                 </div>
 
@@ -122,10 +123,10 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                     <button
                         type="button"
                         onClick={() => handleFilterChange('', '', '')}
-                        className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                        className="h-9 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                     >
-                        <FilterIcon className="h-3 w-3" />
-                        <span>Clear Filters</span>
+                        <FilterIcon className="h-3.5 w-3.5" />
+                        <span>Clear</span>
                     </button>
                 )}
             </div>
@@ -133,25 +134,25 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
             {/* Ledger Table */}
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <table className="min-w-full divide-y divide-slate-200 text-left dark:divide-slate-800">
-                    <thead className="bg-slate-50/75 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/75 dark:text-slate-400">
+                    <thead className="border-b border-slate-200 bg-slate-50/75 text-xs font-medium text-slate-500 dark:border-slate-800 dark:bg-slate-900/75 dark:text-slate-400">
                         <tr>
-                            <th scope="col" className="px-5 py-3.5">
-                                Timestamp & UUID
+                            <th scope="col" className="px-5 py-3 font-medium">
+                                Timestamp
                             </th>
-                            <th scope="col" className="px-5 py-3.5">
+                            <th scope="col" className="px-5 py-3 font-medium">
                                 Location
                             </th>
-                            <th scope="col" className="px-5 py-3.5">
+                            <th scope="col" className="px-5 py-3 font-medium">
                                 Product
                             </th>
-                            <th scope="col" className="px-5 py-3.5">
-                                Movement Type
+                            <th scope="col" className="px-5 py-3 font-medium">
+                                Type
                             </th>
-                            <th scope="col" className="px-5 py-3.5 text-right">
-                                Delta Qty
+                            <th scope="col" className="px-5 py-3 font-medium text-right">
+                                Change (Pieces)
                             </th>
-                            <th scope="col" className="px-5 py-3.5">
-                                Context / Notes
+                            <th scope="col" className="px-5 py-3 font-medium">
+                                Reference & Notes
                             </th>
                         </tr>
                     </thead>
@@ -159,15 +160,15 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                     {isLoading ? (
                         <TableSkeleton rows={5} columns={6} />
                     ) : (
-                        <tbody className="divide-y divide-slate-100 bg-white text-xs dark:divide-slate-800 dark:bg-slate-900">
+                        <tbody className="divide-y divide-slate-100 bg-white text-sm dark:divide-slate-800 dark:bg-slate-900">
                             {ledgers.data.length === 0 ? (
                                 <tr>
                                     <td colSpan={6} className="px-5 py-12 text-center text-slate-500 dark:text-slate-400">
                                         <div className="flex flex-col items-center justify-center gap-2">
                                             <LayersIcon className="h-8 w-8 text-slate-300 dark:text-slate-600" />
-                                            <span className="font-medium">No ledger movements recorded</span>
-                                            <span className="text-[11px] text-slate-400">
-                                                All physical receipts, transfers, and sales will appear here immutably.
+                                            <span className="font-medium text-sm">No ledger movements recorded</span>
+                                            <span className="text-xs text-slate-400">
+                                                All physical receipts, transfers, and sales will appear here.
                                             </span>
                                         </div>
                                     </td>
@@ -181,41 +182,43 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                                             key={entry.id}
                                             className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/50"
                                         >
-                                            <td className="whitespace-nowrap px-5 py-4">
+                                            <td className="whitespace-nowrap px-5 py-3.5">
                                                 <div className="flex flex-col">
                                                     <span className="font-medium text-slate-900 dark:text-slate-100">
                                                         {new Date(entry.created_at).toLocaleString()}
                                                     </span>
-                                                    <span className="font-mono text-[10px] text-slate-400 truncate max-w-[140px]">
+                                                    <span className="font-mono text-[11px] text-slate-400 truncate max-w-[140px]">
                                                         {entry.client_uuid}
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap px-5 py-4">
+                                            <td className="whitespace-nowrap px-5 py-3.5">
                                                 <div className="flex items-center gap-2">
                                                     {entry.location?.type === 'truck' ? (
-                                                        <TruckIcon className="h-3.5 w-3.5 text-indigo-500" />
+                                                        <TruckIcon className="h-3.5 w-3.5 text-slate-400" />
                                                     ) : (
-                                                        <WarehouseIcon className="h-3.5 w-3.5 text-slate-500" />
+                                                        <WarehouseIcon className="h-3.5 w-3.5 text-slate-400" />
                                                     )}
-                                                    <span className="font-semibold text-slate-800 dark:text-slate-200">
+                                                    <span className="font-medium text-slate-900 dark:text-slate-100">
                                                         {entry.location?.code}
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td className="px-5 py-4">
+                                            <td className="px-5 py-3.5">
                                                 <div className="flex flex-col">
-                                                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                                                    <span className="font-medium text-slate-900 dark:text-slate-100">
                                                         {entry.product?.name}
                                                     </span>
-                                                    <span className="font-mono text-[10px] text-slate-400">
-                                                        {entry.product?.sku}
+                                                    <span className="mt-0.5">
+                                                        <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
+                                                            {entry.product?.sku}
+                                                        </span>
                                                     </span>
                                                 </div>
                                             </td>
-                                            <td className="whitespace-nowrap px-5 py-4">
+                                            <td className="whitespace-nowrap px-5 py-3.5">
                                                 <span
-                                                    className={`inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-semibold border ${
+                                                    className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium border ${
                                                         entry.transaction_type === 'STOCK_IN'
                                                             ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
                                                             : entry.transaction_type.startsWith('TRANSFER')
@@ -228,23 +231,23 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                                                     {entry.transaction_type}
                                                 </span>
                                             </td>
-                                            <td className="whitespace-nowrap px-5 py-4 text-right font-mono font-bold">
+                                            <td className="whitespace-nowrap px-5 py-3.5 text-right font-mono font-medium text-sm">
                                                 <span
                                                     className={
                                                         isPositive
-                                                            ? 'text-emerald-600 dark:text-emerald-400'
-                                                            : 'text-red-600 dark:text-red-400'
+                                                            ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                                                            : 'text-rose-600 dark:text-rose-400 font-semibold'
                                                     }
                                                 >
                                                     {isPositive ? `+${entry.qty_change}` : entry.qty_change} pcs
                                                 </span>
                                             </td>
-                                            <td className="px-5 py-4 text-[11px] text-slate-500 dark:text-slate-400">
+                                            <td className="px-5 py-3.5 text-xs text-slate-500 dark:text-slate-400">
                                                 <div className="flex flex-col">
                                                     {entry.notes && <span>{entry.notes}</span>}
                                                     {entry.batch_number && (
-                                                        <span className="text-[10px] text-slate-400">
-                                                            Batch: {entry.batch_number}
+                                                        <span className="text-[11px] font-mono text-slate-400">
+                                                            Lot: {entry.batch_number}
                                                         </span>
                                                     )}
                                                 </div>
@@ -277,9 +280,9 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                                             router.get(link.url, {}, { preserveState: true, onFinish: () => setIsLoading(false) });
                                         }
                                     }}
-                                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                                    className={`h-8 px-3 rounded-lg text-xs font-medium transition ${
                                         link.active
-                                            ? 'bg-indigo-600 text-white shadow-sm'
+                                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
                                             : link.url
                                             ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                                             : 'cursor-not-allowed opacity-40 text-slate-400'

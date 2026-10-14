@@ -29,12 +29,26 @@
 - **Accessibility Invariant**:
   - Never layer body copy over shifting multi-color gradient backgrounds. Always maintain WCAG AA (4.5:1) text contrast ratios against background surfaces.
 
-## Modern Dialogs & Searchable Selection
-- **No Native Browser Dialogs**:
-  - NEVER use `window.alert()`, `window.confirm()`, or `window.prompt()`.
-  - Always use styled, accessible React modal dialogs with backdrop blur (`backdrop-blur-sm`), clear cancel/confirm buttons, loading indicators on execution, and non-blocking toast notifications for status updates.
-- **Searchable Dropdowns (Select & Multi-Select)**:
-  - NEVER use unsearchable raw HTML `<select>` tags for entity or catalog selection.
-  - Always use searchable single-select comboboxes or searchable multi-select dropdowns featuring integrated search filtering, keyboard navigation, and removable badge chips.
+## No Irrelevant Phrases or Marketing Jargon
+- NEVER display buzzwords, slogans, technical marketing filler, or irrelevant phrases anywhere in the interface:
+  - Do NOT use phrases like "Enterprise Core v1.0", "ACID Compliant...", "Fowler Multi-UOM...", "Ledger Synchronized", "NextGen OS", etc.
+  - ONLY use concise, domain-specific descriptions and labels that serve an operational purpose for the user.
+  - Use icons ONLY when they clearly and specifically convey a required action or status; omit decorative visual clutter.
+
+## Typography, Button & Element Sizing Consistency
+- **Standard Control Heights**:
+  - All standard buttons, text inputs, combobox triggers, and dropdown filters MUST share the exact same height: `h-9` (36px).
+  - Compact table buttons: `h-8` (32px).
+- **Font Sizes & Weights Hierarchy**:
+  - Page Titles: `text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100`
+  - Section Headings: `text-sm font-semibold text-slate-900 dark:text-slate-100`
+  - Body & Standard Controls: `text-sm text-slate-700 dark:text-slate-300 font-normal`
+  - Table Column Headers: `text-xs font-medium text-slate-500 dark:text-slate-400` (no wide tracking, no screaming all-caps)
+  - Identifiers & SKUs: `font-mono text-xs font-medium text-slate-700 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700`
+  - Secondary/Caption Text: `text-xs text-slate-500 dark:text-slate-400`
+- **Button Standards**:
+  - Primary Action: `h-9 px-4 rounded-lg bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 shadow-sm transition-colors dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white`
+  - Secondary Action: `h-9 px-3.5 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium text-sm hover:bg-slate-50 shadow-sm transition-colors dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700/80`
+
 
 

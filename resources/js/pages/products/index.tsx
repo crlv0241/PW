@@ -8,7 +8,6 @@ import {
     SearchIcon,
     PlusIcon,
     PackageIcon,
-    BarcodeIcon,
     FilterIcon,
     XIcon,
 } from '../../components/ui/icons';
@@ -29,7 +28,6 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
     const [isLoading, setIsLoading] = useState(false);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-    // Form handling for creating new product
     const { data, setData, post, processing, errors, reset } = useForm({
         sku: '',
         name: '',
@@ -42,7 +40,6 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
         base_uom_price_cents: 0,
     });
 
-    // 300ms debounced search syncing with Inertia URL query
     useEffect(() => {
         const timeout = setTimeout(() => {
             if (search !== filters.search || category !== filters.category) {
@@ -91,26 +88,37 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
 
     return (
         <AppLayout
-            title="Master Product Catalog & Multi-UOM"
+            title="Products"
+            description="Manage catalog items, packaging units, and tax categories."
             breadcrumbs={[
                 { label: 'Back Office', href: '/products' },
-                { label: 'Products & Multi-UOM' },
+                { label: 'Products' },
             ]}
+            actions={
+                <button
+                    type="button"
+                    onClick={() => setIsCreateOpen(true)}
+                    className="h-9 px-3.5 rounded-lg bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white shadow-sm inline-flex items-center gap-2 transition-colors"
+                >
+                    <PlusIcon className="h-4 w-4" />
+                    <span>Add Product</span>
+                </button>
+            }
         >
-            <Head title="Product Catalog - POS & WMS" />
+            <Head title="Products - POS & WMS" />
 
-            {/* Filter and Action Bar */}
-            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
+            {/* Filter Toolbar */}
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-1 flex-wrap items-center gap-3">
                     {/* Search Input */}
                     <div className="relative w-full sm:w-72">
-                        <SearchIcon className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                        <SearchIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <input
                             type="text"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
-                            placeholder="Search SKU, barcode, name..."
-                            className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-8 text-xs text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-500"
+                            placeholder="Search SKU, name..."
+                            className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-8 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm transition focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                         />
                         {search && (
                             <button
@@ -124,12 +132,12 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                     </div>
 
                     {/* Category Combobox Filter */}
-                    <div className="w-full sm:w-56">
+                    <div className="w-full sm:w-52">
                         <Combobox
                             options={categoryOptions}
                             value={category}
                             onChange={(val) => setCategory(val)}
-                            placeholder="Filter by Category"
+                            placeholder="All Categories"
                         />
                     </div>
 
@@ -140,152 +148,148 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                 setSearch('');
                                 setCategory('');
                             }}
-                            className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                            className="h-9 px-2.5 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
                         >
-                            <FilterIcon className="h-3 w-3" />
-                            <span>Clear Filters</span>
+                            <FilterIcon className="h-3.5 w-3.5" />
+                            <span>Clear</span>
                         </button>
                     )}
                 </div>
-
-                {/* Add Product Button */}
-                <button
-                    type="button"
-                    onClick={() => setIsCreateOpen(true)}
-                    className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                >
-                    <PlusIcon className="h-4 w-4" />
-                    <span>Create Product</span>
-                </button>
             </div>
 
-            {/* Products Table */}
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-                <table className="min-w-full divide-y divide-slate-200 text-left dark:divide-slate-800">
-                    <thead className="bg-slate-50/75 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:bg-slate-900/75 dark:text-slate-400">
-                        <tr>
-                            <th scope="col" className="px-5 py-3.5">
-                                SKU / Code
-                            </th>
-                            <th scope="col" className="px-5 py-3.5">
-                                Product Details
-                            </th>
-                            <th scope="col" className="px-5 py-3.5">
-                                Multi-UOM Tiers
-                            </th>
-                            <th scope="col" className="px-5 py-3.5">
-                                Tax Classification
-                            </th>
-                            <th scope="col" className="px-5 py-3.5">
-                                Status
-                            </th>
-                        </tr>
-                    </thead>
+            {/* Products Table Card */}
+            <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800/80 dark:bg-slate-900">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-slate-200 text-left dark:divide-slate-800">
+                        <thead className="bg-slate-50/75 dark:bg-slate-900/75">
+                            <tr>
+                                <th scope="col" className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    SKU
+                                </th>
+                                <th scope="col" className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    Product
+                                </th>
+                                <th scope="col" className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    Packaging & UOM
+                                </th>
+                                <th scope="col" className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    Tax
+                                </th>
+                                <th scope="col" className="px-4 py-3 text-xs font-medium text-slate-500 dark:text-slate-400">
+                                    Status
+                                </th>
+                            </tr>
+                        </thead>
 
-                    {isLoading ? (
-                        <TableSkeleton rows={5} columns={5} />
-                    ) : (
-                        <tbody className="divide-y divide-slate-100 bg-white text-xs dark:divide-slate-800 dark:bg-slate-900">
-                            {products.data.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500 dark:text-slate-400">
-                                        <div className="flex flex-col items-center justify-center gap-2">
-                                            <PackageIcon className="h-8 w-8 text-slate-300 dark:text-slate-600" />
-                                            <span className="font-medium">No products found matching criteria</span>
-                                            <span className="text-[11px] text-slate-400">Try adjusting your search terms or filter.</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : (
-                                products.data.map((product) => (
-                                    <tr
-                                        key={product.id}
-                                        className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/50"
-                                    >
-                                        <td className="whitespace-nowrap px-5 py-4 font-mono font-bold text-indigo-700 dark:text-indigo-400">
-                                            {product.sku}
-                                        </td>
-                                        <td className="px-5 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="font-semibold text-slate-900 dark:text-slate-100">
-                                                    {product.name}
-                                                </span>
-                                                <div className="mt-0.5 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                                                    <span className="rounded bg-slate-100 px-1.5 py-0.5 dark:bg-slate-800 font-medium">
-                                                        {product.category}
-                                                    </span>
-                                                    {product.description && (
-                                                        <span className="truncate max-w-xs text-slate-400">
-                                                            {product.description}
-                                                        </span>
-                                                    )}
-                                                </div>
+                        {isLoading ? (
+                            <TableSkeleton rows={5} columns={5} />
+                        ) : (
+                            <tbody className="divide-y divide-slate-100 bg-white dark:divide-slate-800/60 dark:bg-slate-900">
+                                {products.data.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-4 py-12 text-center text-slate-500 dark:text-slate-400">
+                                            <div className="flex flex-col items-center justify-center gap-1.5">
+                                                <PackageIcon className="h-6 w-6 text-slate-400" />
+                                                <span className="text-sm font-medium text-slate-900 dark:text-slate-100">No products found</span>
+                                                <span className="text-xs text-slate-500">Try adjusting your search terms or filter.</span>
                                             </div>
                                         </td>
-                                        <td className="px-5 py-4">
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {product.uoms.map((uom) => (
-                                                    <div
-                                                        key={uom.id}
-                                                        className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium border ${
-                                                            uom.is_base_unit
-                                                                ? 'border-indigo-200 bg-indigo-50/50 text-indigo-800 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300'
-                                                                : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                                        }`}
-                                                    >
-                                                        <span>{uom.name}</span>
-                                                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                                                            (x{uom.conversion_factor})
+                                    </tr>
+                                ) : (
+                                    products.data.map((product) => (
+                                        <tr
+                                            key={product.id}
+                                            className="transition-colors hover:bg-slate-50/80 dark:hover:bg-slate-800/50"
+                                        >
+                                            <td className="whitespace-nowrap px-4 py-3.5">
+                                                <span className="font-mono text-xs font-medium text-slate-700 bg-slate-100 dark:bg-slate-800 dark:text-slate-300 px-2 py-0.5 rounded border border-slate-200/80 dark:border-slate-700">
+                                                    {product.sku}
+                                                </span>
+                                            </td>
+
+                                            <td className="px-4 py-3.5">
+                                                <div className="flex flex-col">
+                                                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                                                        {product.name}
+                                                    </span>
+                                                    <div className="mt-0.5 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                        <span className="rounded bg-slate-100 px-1.5 py-0.2 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                                                            {product.category}
                                                         </span>
-                                                        {uom.barcode && (
-                                                            <BarcodeIcon className="h-3 w-3 text-slate-400" />
-                                                        )}
-                                                        {uom.price_cents !== null && (
-                                                            <span className="ml-1 font-semibold text-slate-900 dark:text-slate-100">
-                                                                ₱{(uom.price_cents / 100).toFixed(2)}
+                                                        {product.description && (
+                                                            <span className="truncate max-w-sm text-slate-400">
+                                                                {product.description}
                                                             </span>
                                                         )}
                                                     </div>
-                                                ))}
-                                            </div>
-                                        </td>
-                                        <td className="whitespace-nowrap px-5 py-4">
-                                            <div className="flex flex-col">
-                                                <span className="font-medium text-slate-700 dark:text-slate-300">
+                                                </div>
+                                            </td>
+
+                                            <td className="px-4 py-3.5">
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {product.uoms.map((uom) => (
+                                                        <span
+                                                            key={uom.id}
+                                                            className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium border ${
+                                                                uom.is_base_unit
+                                                                    ? 'border-indigo-200 bg-indigo-50/60 text-indigo-900 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-200'
+                                                                    : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                                            }`}
+                                                        >
+                                                            <span>{uom.name}</span>
+                                                            <span className="text-slate-400">·</span>
+                                                            <span className="text-slate-500 font-normal">{uom.conversion_factor}x</span>
+                                                            {uom.price_cents !== null && (
+                                                                <>
+                                                                    <span className="text-slate-400">·</span>
+                                                                    <span className="font-semibold text-slate-900 dark:text-slate-100">
+                                                                        ₱{(uom.price_cents / 100).toFixed(2)}
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </td>
+
+                                            <td className="whitespace-nowrap px-4 py-3.5">
+                                                <div className="text-xs font-medium text-slate-700 dark:text-slate-300">
                                                     {product.tax_category}
-                                                </span>
-                                                <span className="text-[11px] text-slate-400">
+                                                </div>
+                                                <div className="text-xs text-slate-500">
                                                     {(parseFloat(product.tax_rate) * 100).toFixed(0)}% Tax
+                                                </div>
+                                            </td>
+
+                                            <td className="whitespace-nowrap px-4 py-3.5">
+                                                <span
+                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium border ${
+                                                        product.status === 'ACTIVE'
+                                                            ? 'border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                                            : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                                                    }`}
+                                                >
+                                                    <span className={`h-1.5 w-1.5 rounded-full ${product.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+                                                    <span>{product.status === 'ACTIVE' ? 'Active' : 'Inactive'}</span>
                                                 </span>
-                                            </div>
-                                        </td>
-                                        <td className="whitespace-nowrap px-5 py-4">
-                                            <span
-                                                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                                                    product.status === 'ACTIVE'
-                                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                                        : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-                                                }`}
-                                            >
-                                                {product.status}
-                                            </span>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    )}
-                </table>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        )}
+                    </table>
+                </div>
 
                 {/* Pagination Controls */}
                 {products.last_page > 1 && (
-                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-5 py-3 text-xs dark:border-slate-800 dark:bg-slate-900/50">
+                    <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50/50 px-4 py-3 text-xs dark:border-slate-800 dark:bg-slate-900/50">
                         <div className="text-slate-500 dark:text-slate-400">
-                            Showing <span className="font-semibold text-slate-900 dark:text-slate-100">{products.from}</span> to{' '}
-                            <span className="font-semibold text-slate-900 dark:text-slate-100">{products.to}</span> of{' '}
-                            <span className="font-semibold text-slate-900 dark:text-slate-100">{products.total}</span> products
+                            Showing <span className="font-medium text-slate-900 dark:text-slate-100">{products.from}</span> to{' '}
+                            <span className="font-medium text-slate-900 dark:text-slate-100">{products.to}</span> of{' '}
+                            <span className="font-medium text-slate-900 dark:text-slate-100">{products.total}</span> products
                         </div>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1">
                             {products.links.map((link, i) => (
                                 <button
                                     key={i}
@@ -297,11 +301,11 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                             router.get(link.url, {}, { preserveState: true, onFinish: () => setIsLoading(false) });
                                         }
                                     }}
-                                    className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                                    className={`h-7 px-2.5 rounded-md text-xs font-medium transition ${
                                         link.active
-                                            ? 'bg-indigo-600 text-white shadow-sm'
+                                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
                                             : link.url
-                                            ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                                            ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                                             : 'cursor-not-allowed opacity-40 text-slate-400'
                                     }`}
                                     dangerouslySetInnerHTML={{ __html: link.label }}
@@ -316,41 +320,43 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
             <Modal
                 isOpen={isCreateOpen}
                 onClose={() => setIsCreateOpen(false)}
-                title="Create New Product"
-                description="Register a new master catalog item with its base indivisible packaging unit."
+                title="Add Product"
+                description="Create a product catalog item and its base packaging unit."
                 confirmText="Save Product"
                 onConfirm={handleCreateSubmit}
                 isLoading={processing}
-                maxWidth="xl"
+                maxWidth="lg"
             >
-                <form onSubmit={handleCreateSubmit} className="flex flex-col gap-4">
+                <form onSubmit={handleCreateSubmit} className="space-y-4 pt-1">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                                 SKU Code *
                             </label>
                             <input
                                 type="text"
+                                required
                                 value={data.sku}
                                 onChange={(e) => setData('sku', e.target.value)}
                                 placeholder="e.g. BEV-COLA-500"
-                                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 font-mono"
                             />
-                            {errors.sku && <p className="mt-1 text-xs text-red-600">{errors.sku}</p>}
+                            {errors.sku && <p className="mt-1 text-xs text-rose-500">{errors.sku}</p>}
                         </div>
 
                         <div>
-                            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                                 Product Name *
                             </label>
                             <input
                                 type="text"
+                                required
                                 value={data.name}
                                 onChange={(e) => setData('name', e.target.value)}
-                                placeholder="e.g. Sparkling Cola 500ml Bottle"
-                                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                placeholder="e.g. Sparkling Cola 500ml"
+                                className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                             />
-                            {errors.name && <p className="mt-1 text-xs text-red-600">{errors.name}</p>}
+                            {errors.name && <p className="mt-1 text-xs text-rose-500">{errors.name}</p>}
                         </div>
                     </div>
 
@@ -361,19 +367,19 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                 options={newProductCategoryOptions}
                                 value={data.category}
                                 onChange={(val) => setData('category', val)}
-                                placeholder="Select category..."
+                                placeholder="Select category"
                                 error={errors.category}
                             />
                         </div>
 
                         <div>
-                            <label className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                            <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                                 Tax Category *
                             </label>
                             <select
                                 value={data.tax_category}
                                 onChange={(e) => setData('tax_category', e.target.value)}
-                                className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                             >
                                 <option value="STANDARD">Standard (12% VAT)</option>
                                 <option value="ZERO_RATED">Zero Rated (0%)</option>
@@ -382,42 +388,55 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                         </div>
                     </div>
 
-                    <div className="border-t border-slate-100 pt-4 dark:border-slate-800">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 mb-2">
-                            Base Indivisible Unit of Measure (Conversion Factor = 1)
-                        </h4>
+                    <div>
+                        <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                            Description
+                        </label>
+                        <input
+                            type="text"
+                            value={data.description}
+                            onChange={(e) => setData('description', e.target.value)}
+                            placeholder="Optional product description"
+                            className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+                        />
+                    </div>
+
+                    <div className="border-t border-slate-200 dark:border-slate-800 pt-3">
+                        <div className="text-xs font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                            Base Packaging Unit
+                        </div>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                             <div>
-                                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                                    Base Unit Name *
+                                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                    Base Unit *
                                 </label>
                                 <input
                                     type="text"
+                                    required
                                     value={data.base_uom_name}
                                     onChange={(e) => setData('base_uom_name', e.target.value)}
-                                    placeholder="e.g. Piece, Can, Bottle"
-                                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                                    placeholder="e.g. Piece"
+                                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                                 />
-                                {errors.base_uom_name && <p className="mt-1 text-xs text-red-600">{errors.base_uom_name}</p>}
+                                {errors.base_uom_name && <p className="mt-1 text-xs text-rose-500">{errors.base_uom_name}</p>}
                             </div>
 
                             <div>
-                                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                                    Barcode (UPC / EAN)
+                                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                    Barcode
                                 </label>
                                 <input
                                     type="text"
                                     value={data.base_uom_barcode}
                                     onChange={(e) => setData('base_uom_barcode', e.target.value)}
-                                    placeholder="Scan or enter barcode"
-                                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 font-mono"
+                                    placeholder="Optional barcode"
+                                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 font-mono"
                                 />
-                                {errors.base_uom_barcode && <p className="mt-1 text-xs text-red-600">{errors.base_uom_barcode}</p>}
                             </div>
 
                             <div>
-                                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
-                                    Base Price (₱)
+                                <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                                    Price (₱)
                                 </label>
                                 <input
                                     type="number"
@@ -425,7 +444,7 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                     value={(data.base_uom_price_cents / 100).toFixed(2)}
                                     onChange={(e) => setData('base_uom_price_cents', Math.round(parseFloat(e.target.value || '0') * 100))}
                                     placeholder="0.00"
-                                    className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs text-slate-900 focus:border-indigo-600 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 font-mono"
+                                    className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 font-mono"
                                 />
                             </div>
                         </div>

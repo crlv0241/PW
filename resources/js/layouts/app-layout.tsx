@@ -4,7 +4,6 @@ import {
     PackageIcon,
     WarehouseIcon,
     LayersIcon,
-    ShieldCheckIcon,
     UsersIcon,
     PaletteIcon,
     LogOutIcon,
@@ -52,16 +51,17 @@ interface SharedProps {
 interface AppLayoutProps {
     children: React.ReactNode;
     title?: string;
+    description?: string;
     breadcrumbs?: { label: string; href?: string }[];
+    actions?: React.ReactNode;
 }
 
-export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
+export function AppLayout({ children, title, description, breadcrumbs, actions }: AppLayoutProps) {
     const page = usePage<SharedProps>();
     const { auth, branding, flash } = page.props;
     const currentUrl = page.url;
     const user = auth?.user;
 
-    // Sidebar collapsed state (persisted in localStorage)
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobileOpen, setIsMobileOpen] = useState(false);
 
@@ -85,10 +85,7 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
     };
 
     const companyName = branding?.company_name || 'APEX POS & WMS';
-    const tagline = branding?.tagline || 'Enterprise Core v1.0';
-    const primaryColor = branding?.primary_color || '#4f46e5';
 
-    // Route active check
     const isCurrent = (path: string) => {
         if (path === '/inventory') {
             return currentUrl === '/inventory';
@@ -97,55 +94,47 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
     };
 
     const navItemClasses = (active: boolean) =>
-        `group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition-all ${
+        `group flex h-9 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors ${
             active
-                ? 'bg-slate-900 text-white shadow-sm dark:bg-slate-800 dark:text-slate-50'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
+                ? 'bg-slate-100 text-slate-900 font-semibold dark:bg-slate-800 dark:text-slate-100'
+                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-200'
         }`;
 
     return (
-        <div className="min-h-screen bg-slate-50/60 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100 flex">
+        <div className="min-h-screen bg-slate-50/50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100 flex">
             {/* Mobile Backdrop */}
             {isMobileOpen && (
                 <div
                     onClick={() => setIsMobileOpen(false)}
-                    className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-sm lg:hidden transition-opacity"
+                    className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-sm lg:hidden transition-opacity"
                 />
             )}
 
             {/* Left Vertical Navigation Sidebar */}
             <aside
-                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200/80 bg-white/95 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-900/95 transition-all duration-300 ease-in-out lg:static ${
+                className={`fixed inset-y-0 left-0 z-50 flex flex-col border-r border-slate-200/80 bg-white dark:border-slate-800/80 dark:bg-slate-900 transition-all duration-200 ease-in-out lg:static ${
                     isMobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-                } ${isCollapsed ? 'w-20' : 'w-64'}`}
+                } ${isCollapsed ? 'w-16' : 'w-60'}`}
             >
                 {/* Brand Header */}
-                <div className="flex h-16 items-center justify-between px-4 border-b border-slate-200/80 dark:border-slate-800/80">
-                    <Link href="/products" className="flex items-center gap-3 overflow-hidden">
+                <div className="flex h-14 items-center justify-between px-3.5 border-b border-slate-200/80 dark:border-slate-800/80">
+                    <Link href="/products" className="flex items-center gap-2.5 overflow-hidden">
                         {branding?.logo_url ? (
                             <img
                                 src={branding.logo_url}
                                 alt={companyName}
-                                className="h-9 w-9 shrink-0 rounded-xl object-contain bg-white dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700 shadow-sm"
+                                className="h-7 w-7 shrink-0 rounded-lg object-contain bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-0.5"
                             />
                         ) : (
-                            <div
-                                style={{ backgroundColor: primaryColor }}
-                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-md shadow-indigo-500/10"
-                            >
-                                <LayersIcon className="h-5 w-5" />
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+                                <LayersIcon className="h-4 w-4" />
                             </div>
                         )}
 
                         {!isCollapsed && (
-                            <div className="flex flex-col overflow-hidden">
-                                <span className="text-sm font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">
-                                    {companyName}
-                                </span>
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 truncate">
-                                    {tagline}
-                                </span>
-                            </div>
+                            <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100 truncate">
+                                {companyName}
+                            </span>
                         )}
                     </Link>
 
@@ -154,7 +143,7 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                         type="button"
                         onClick={toggleCollapse}
                         title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
-                        className="hidden lg:flex p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors"
+                        className="hidden lg:flex p-1 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors"
                     >
                         {isCollapsed ? (
                             <PanelLeftOpenIcon className="h-4 w-4" />
@@ -165,13 +154,13 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                 </div>
 
                 {/* Sidebar Navigation Items */}
-                <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+                <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-5">
                     {/* Category: OPERATIONS */}
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                         {!isCollapsed && (
-                            <h2 className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
-                                Operations & Stock
-                            </h2>
+                            <div className="px-2.5 pb-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
+                                Inventory & Stock
+                            </div>
                         )}
 
                         <Link
@@ -180,7 +169,7 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                             className={navItemClasses(isCurrent('/products'))}
                         >
                             <PackageIcon className="h-4 w-4 shrink-0" />
-                            {!isCollapsed && <span>Catalog & UOMs</span>}
+                            {!isCollapsed && <span>Products & UOM</span>}
                         </Link>
 
                         <Link
@@ -194,7 +183,7 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
 
                         <Link
                             href="/inventory/ledger"
-                            title="Ledger Movement Audit"
+                            title="Ledger Audit"
                             className={navItemClasses(isCurrent('/inventory/ledger'))}
                         >
                             <LayersIcon className="h-4 w-4 shrink-0" />
@@ -204,11 +193,11 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
 
                     {/* Category: GOVERNANCE & ADMIN (Super Admin) */}
                     {user?.is_super_admin && (
-                        <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                        <div className="space-y-0.5 pt-3 border-t border-slate-100 dark:border-slate-800/60">
                             {!isCollapsed && (
-                                <h2 className="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+                                <div className="px-2.5 pb-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                                     Administration
-                                </h2>
+                                </div>
                             )}
 
                             <Link
@@ -232,12 +221,12 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                     )}
                 </div>
 
-                {/* Sidebar Bottom User & Status Profile */}
-                <div className="p-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/40">
+                {/* Sidebar Bottom User Account */}
+                <div className="p-2.5 border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/40">
                     {user ? (
                         <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5 overflow-hidden">
-                                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white shadow-inner dark:bg-slate-800">
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-semibold text-white dark:bg-slate-700">
                                     {user.name
                                         .split(' ')
                                         .map((n) => n[0])
@@ -249,7 +238,7 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                                         <span className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
                                             {user.name}
                                         </span>
-                                        <span className="text-[10px] font-medium text-slate-500 dark:text-slate-400 truncate">
+                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                                             {user.primary_role}
                                         </span>
                                     </div>
@@ -260,7 +249,7 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                                 type="button"
                                 onClick={handleLogout}
                                 title="Sign Out"
-                                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200/60 hover:text-rose-600 dark:hover:bg-slate-800 dark:hover:text-rose-400 transition-colors shrink-0"
+                                className="p-1 rounded-md text-slate-400 hover:bg-slate-200/60 hover:text-rose-600 dark:hover:bg-slate-800 dark:hover:text-rose-400 transition-colors shrink-0"
                             >
                                 <LogOutIcon className="h-4 w-4" />
                             </button>
@@ -268,7 +257,7 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                     ) : (
                         <Link
                             href="/login"
-                            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"
+                            className="flex h-8 w-full items-center justify-center rounded-lg bg-slate-900 text-xs font-medium text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 transition-colors"
                         >
                             <span>Sign In</span>
                         </Link>
@@ -279,28 +268,28 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
             {/* Main Application Area */}
             <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
                 {/* Top Control Bar */}
-                <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/75 backdrop-blur-xl px-4 sm:px-6 lg:px-8 dark:border-slate-800/80 dark:bg-slate-900/75">
+                <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/80 backdrop-blur-md px-4 sm:px-6 lg:px-8 dark:border-slate-800/80 dark:bg-slate-900/80">
                     {/* Left: Mobile Toggle & Breadcrumbs */}
                     <div className="flex items-center gap-3">
                         <button
                             type="button"
                             onClick={() => setIsMobileOpen(true)}
-                            className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 lg:hidden"
+                            className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 lg:hidden"
                         >
-                            <MenuIcon className="h-5 w-5" />
+                            <MenuIcon className="h-4 w-4" />
                         </button>
 
                         {breadcrumbs && (
-                            <nav className="flex items-center gap-1.5 text-xs text-slate-400">
+                            <nav className="flex items-center gap-1.5 text-xs text-slate-500">
                                 {breadcrumbs.map((b, i) => (
                                     <React.Fragment key={i}>
                                         {i > 0 && <ChevronRightIcon className="h-3 w-3 text-slate-300 dark:text-slate-600 shrink-0" />}
                                         {b.href ? (
-                                            <Link href={b.href} className="hover:text-slate-700 dark:hover:text-slate-200 transition-colors font-medium">
+                                            <Link href={b.href} className="hover:text-slate-900 dark:hover:text-slate-100 transition-colors font-medium">
                                                 {b.label}
                                             </Link>
                                         ) : (
-                                            <span className="text-slate-700 dark:text-slate-200 font-semibold">
+                                            <span className="text-slate-900 dark:text-slate-100 font-medium">
                                                 {b.label}
                                             </span>
                                         )}
@@ -309,45 +298,47 @@ export function AppLayout({ children, title, breadcrumbs }: AppLayoutProps) {
                             </nav>
                         )}
                     </div>
-
-                    {/* Right: Status Indicators & Quick Actions */}
-                    <div className="flex items-center gap-3">
-                        <div className="hidden sm:flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            <span>Ledger Synchronized</span>
-                        </div>
-                    </div>
                 </header>
 
                 {/* Flash Messages */}
                 {flash?.success && (
-                    <div className="border-b border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-xs font-medium text-emerald-800 dark:text-emerald-200 shadow-sm animate-in fade-in duration-200">
+                    <div className="border-b border-emerald-500/20 bg-emerald-50 px-4 py-2 text-xs font-medium text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
                         <div className="mx-auto flex max-w-7xl items-center gap-2">
-                            <CheckIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                            <CheckIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                             <span>{flash.success}</span>
                         </div>
                     </div>
                 )}
                 {flash?.error && (
-                    <div className="border-b border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs font-medium text-rose-800 dark:text-rose-200 shadow-sm animate-in fade-in duration-200">
+                    <div className="border-b border-rose-500/20 bg-rose-50 px-4 py-2 text-xs font-medium text-rose-800 dark:bg-rose-950/40 dark:text-rose-300">
                         <div className="mx-auto flex max-w-7xl items-center gap-2">
-                            <XIcon className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                            <XIcon className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
                             <span>{flash.error}</span>
                         </div>
                     </div>
                 )}
 
-                {/* Page Title Header */}
+                {/* Page Title & Actions Header (Integrated) */}
                 {title && (
-                    <div className="border-b border-slate-200/80 bg-white/60 dark:border-slate-800/80 dark:bg-slate-900/60 backdrop-blur-sm px-4 sm:px-6 lg:px-8 py-5">
-                        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                            {title}
-                        </h1>
+                    <div className="border-b border-slate-200/80 bg-white dark:border-slate-800/80 dark:bg-slate-900 px-4 sm:px-6 lg:px-8 py-4">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h1 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+                                    {title}
+                                </h1>
+                                {description && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                        {description}
+                                    </p>
+                                )}
+                            </div>
+                            {actions && <div className="mt-2 sm:mt-0">{actions}</div>}
+                        </div>
                     </div>
                 )}
 
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-y-auto px-4 py-8 sm:px-6 lg:px-8">
+                <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 lg:px-8">
                     {children}
                 </main>
             </div>

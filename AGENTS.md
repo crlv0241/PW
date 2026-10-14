@@ -41,6 +41,7 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 - **NEVER INSTALL NEW DEPENDENCIES WITHOUT APPROVAL**: Do not modify `composer.json` or `package.json` without explicit request.
 - **NEVER EDIT COMMITTED MIGRATIONS**: Always create a new sequential migration to alter schemas.
 - **NEVER WRITE UNPARAMETERIZED RAW SQL**: Always use Eloquent query builder or parameterized bindings (`DB::raw('...', [$val])`).
+- **NEVER INCLUDE IRRELEVANT MARKETING PHRASES OR JARGON**: Do not display buzzwords, slogans, or technical marketing filler in UI, headers, cards, or badges (e.g. "Enterprise Core v1.0", "ACID Compliant...", "Ledger Synchronized", "NextGen OS"). Use only concise, domain-specific descriptions and icons that describe actions specifically and only when truly needed.
 
 *Detailed rule files: [`.agents/rules/`](.agents/rules/)*
 
@@ -55,6 +56,7 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 ---
 
 ## 5. UI/UX & Coding Standards
+- **Typography & Element Consistency**: Uniform standard heights and hierarchy across all views: standard interactive buttons and inputs are `h-9 text-sm rounded-lg` (`h-8 text-xs rounded-md` for compact table actions); page titles `text-xl font-semibold tracking-tight text-slate-900`; table column headers `text-xs font-medium text-slate-500`; codes/SKUs `font-mono text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200`. Never mix mismatched heights, random heavy weights, or wide letter-spacing.
 - **Async Loading States**: Always include loading spinners or pulsing skeletons (`animate-pulse`) during async requests. Never leave the UI unresponsive.
 - **Thoughtful Abstraction (DRY)**: Assess performance, independent evolution, and coupling before abstracting. Prefer slight duplication over premature/bad abstraction.
 - **Modern Design & Subtle Gradients**: Refined, low-contrast monochromatic or analogous transitions (`from-slate-900 to-slate-800`, `from-indigo-500/10 via-transparent to-transparent`). Never use jarring light-to-dark gradient jumps on the same surface. Maintain WCAG AA (4.5:1) contrast.

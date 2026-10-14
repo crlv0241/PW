@@ -94,7 +94,7 @@ export function Combobox({
     return (
         <div ref={containerRef} className={`relative flex flex-col gap-1.5 ${className}`}>
             {label && (
-                <label htmlFor={id} className="text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                <label htmlFor={id} className="text-xs font-medium text-slate-700 dark:text-slate-300">
                     {label}
                 </label>
             )}
@@ -113,16 +113,16 @@ export function Combobox({
                     }
                 }}
                 onKeyDown={handleKeyDown}
-                className={`flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-sm transition-all focus:outline-none focus:ring-2 ${
+                className={`flex h-9 w-full items-center justify-between rounded-lg border px-3 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 ${
                     error
-                        ? 'border-red-500 bg-red-50/20 text-red-900 focus:ring-red-400 dark:border-red-500 dark:text-red-200'
-                        : 'border-slate-300 bg-white text-slate-900 hover:border-slate-400 focus:border-indigo-600 focus:ring-indigo-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-600'
+                        ? 'border-rose-400 bg-rose-50/20 text-rose-900 focus:ring-rose-400/20 dark:border-rose-500 dark:text-rose-200'
+                        : 'border-slate-300 bg-white text-slate-900 hover:border-slate-400 focus:border-slate-900 focus:ring-slate-900/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-slate-600 dark:focus:border-slate-400'
                 } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
             >
-                <span className={selectedOption ? 'font-medium' : 'text-slate-400 dark:text-slate-500'}>
+                <span className={`truncate ${selectedOption ? 'font-normal text-slate-900 dark:text-slate-100' : 'text-slate-400 dark:text-slate-500'}`}>
                     {selectedOption ? selectedOption.label : placeholder}
                 </span>
-                <ChevronDownIcon className={`h-4 w-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDownIcon className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isOpen && (
