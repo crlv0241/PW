@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { AppLayout } from '../../../layouts/app-layout';
 import { Combobox } from '../../../components/ui/combobox';
@@ -23,293 +23,27 @@ import type {
     Product,
     ProductUom,
 } from '../../../types/pos';
+import type {
+    PoLineItem,
+    OrderDiscountStep,
+    ScannerFeedback,
+    OrderTaxType,
+} from './order-types';
+import {
+    computeDiscount,
+    computeDiscountPipeline,
+    parsePunchQuery,
+    findMatchingUom,
+    getProductSoh,
+    computeUomPrice,
+} from './order-math';
+import { UomSelectionModal } from './components/uom-selection-modal';
+import { store, index } from '@/actions/App/Http/Controllers/Procurement/PurchaseOrderController';
 
 interface Props {
     suppliers: Supplier[];
     locations: Location[];
     products: Product[];
-}
-
-interface NewPoLineItem {
-    product_id: number;
-    product_sku: string;
-    product_name: string;
-    product_category: string;
-    product_uom_id: number;
-    conversion_factor: number;
-    ordered_qty: number;
-    unit_cost: string;
-    discount_type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'COMPOUND';
-    discount_percent_formula: string;
-    discount_fixed_amount: string;
-    stock_on_hand: number;
-}
-
-interface OrderDiscountStep {
-    id: string;
-    type: 'PERCENT' | 'FIXED';
-    value: string;
-}
-
-interface ParsedPunch {
-    query: string;
-    qty: number;
-    uomHint?: string;
-    isOnlyMultiplier: boolean;
-}
-
-/**
- * High-speed discount calculation supporting %, fixed ₱, and stacked compound (e.g. 10+5+2%).
- */
-function computeDiscount(
-    grossUnitCost: number,
-    type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'COMPOUND',
-    percentFormula: string,
-    fixedAmountStr: string
-): { unitDiscount: number; effectivePct: number } {
-    if (grossUnitCost <= 0) return { unitDiscount: 0, effectivePct: 0 };
-
-    if (type === 'FIXED_AMOUNT') {
-        const fixed = parseFloat(fixedAmountStr) || 0;
-        const discount = Math.min(grossUnitCost, Math.max(0, fixed));
-        return {
-            unitDiscount: discount,
-            effectivePct: grossUnitCost > 0 ? discount / grossUnitCost : 0,
-        };
-    }
-
-    if (type === 'PERCENTAGE') {
-        const tokens = (percentFormula || '0')
-            .split('+')
-            .map((t) => parseFloat(t.trim()))
-            .filter((n) => !isNaN(n) && n > 0);
-
-        if (tokens.length === 0) return { unitDiscount: 0, effectivePct: 0 };
-
-        let rem = grossUnitCost;
-        for (const pct of tokens) {
-            const factor = Math.min(100, Math.max(0, pct)) / 100;
-            rem = rem * (1 - factor);
-        }
-        const unitDiscount = Math.max(0, grossUnitCost - rem);
-        return {
-            unitDiscount,
-            effectivePct: grossUnitCost > 0 ? unitDiscount / grossUnitCost : 0,
-        };
-    }
-
-    if (type === 'COMPOUND') {
-        const tokens = (percentFormula || '0')
-            .split('+')
-            .map((t) => parseFloat(t.trim()))
-            .filter((n) => !isNaN(n) && n > 0);
-
-        let rem = grossUnitCost;
-        for (const pct of tokens) {
-            const factor = Math.min(100, Math.max(0, pct)) / 100;
-            rem = rem * (1 - factor);
-        }
-
-        const fixed = parseFloat(fixedAmountStr) || 0;
-        rem = Math.max(0, rem - fixed);
-
-        const unitDiscount = Math.max(0, grossUnitCost - rem);
-        return {
-            unitDiscount,
-            effectivePct: grossUnitCost > 0 ? unitDiscount / grossUnitCost : 0,
-        };
-    }
-
-    return { unitDiscount: 0, effectivePct: 0 };
-}
-
-/**
- * Sequential Overall PO-Level Ordered Discount Pipeline Computation.
- */
-function computeDiscountPipeline(
-    grossSubtotal: number,
-    steps: OrderDiscountStep[]
-): {
-    totalDiscount: number;
-    stepBreakdown: { stepIndex: number; stepDiscount: number; remaining: number }[];
-    finalPayable: number;
-    formula: string;
-} {
-    let currentAmount = grossSubtotal;
-    let totalDiscount = 0;
-    const stepBreakdown: { stepIndex: number; stepDiscount: number; remaining: number }[] = [];
-    const formulaTokens: string[] = ['Gross'];
-
-    for (let i = 0; i < steps.length; i++) {
-        const step = steps[i];
-        if (!step.value || step.value.trim() === '') continue;
-
-        if (step.type === 'PERCENT') {
-            const subTokens = step.value
-                .split('+')
-                .map((t) => parseFloat(t.trim()))
-                .filter((n) => !isNaN(n) && n > 0);
-
-            if (subTokens.length > 0) {
-                let startAmount = currentAmount;
-                for (const pct of subTokens) {
-                    const factor = Math.min(100, Math.max(0, pct)) / 100;
-                    currentAmount = currentAmount * (1 - factor);
-                }
-                const stepDisc = Math.max(0, startAmount - currentAmount);
-                totalDiscount += stepDisc;
-                stepBreakdown.push({
-                    stepIndex: i + 1,
-                    stepDiscount: stepDisc,
-                    remaining: currentAmount,
-                });
-                formulaTokens.push(`-${step.value}%`);
-            }
-        } else if (step.type === 'FIXED') {
-            const fixedVal = parseFloat(step.value);
-            if (!isNaN(fixedVal) && fixedVal > 0) {
-                const stepDisc = Math.min(currentAmount, fixedVal);
-                currentAmount = Math.max(0, currentAmount - stepDisc);
-                totalDiscount += stepDisc;
-                stepBreakdown.push({
-                    stepIndex: i + 1,
-                    stepDiscount: stepDisc,
-                    remaining: currentAmount,
-                });
-                formulaTokens.push(`-₱${fixedVal.toFixed(2)}`);
-            }
-        }
-    }
-
-    return {
-        totalDiscount,
-        stepBreakdown,
-        finalPayable: currentAmount,
-        formula: formulaTokens.length > 1 ? formulaTokens.join(' ') : '',
-    };
-}
-
-/**
- * High-speed multiplier shortcut parser:
- * - "*3" or "3*" -> sets sticky multiplier to 3
- * - "3*BEV" -> punches 3 of item matching "BEV"
- * - "BEV*3" -> punches 3 of item matching "BEV"
- * - "BEV" -> punches 1 of item matching "BEV"
- */
-function extractUomAndQuery(raw: string): { query: string; uomHint?: string } {
-    const trimmed = raw.trim();
-    const slashIdx = trimmed.lastIndexOf('/');
-    const colonIdx = trimmed.lastIndexOf(':');
-    const sepIdx = Math.max(slashIdx, colonIdx);
-    if (sepIdx !== -1 && sepIdx < trimmed.length - 1) {
-        return {
-            query: trimmed.slice(0, sepIdx).trim(),
-            uomHint: trimmed.slice(sepIdx + 1).trim().toUpperCase(),
-        };
-    }
-    return { query: trimmed };
-}
-
-/**
- * High-speed multiplier & UOM shortcut parser:
- * - "*3" or "3*" -> sets sticky multiplier to 3
- * - "3*BEV" -> punches 3 of item matching "BEV"
- * - "3*BEV/CS" or "10*BEV:CASE" -> punches 3 of item in Case UOM
- * - "BEV/BOX*5" -> punches 5 Boxes of BEV
- * - "BEV" -> punches 1 of item matching "BEV"
- */
-function parsePunchQuery(rawInput: string): ParsedPunch {
-    const trimmed = rawInput.trim();
-    if (!trimmed) {
-        return { query: '', qty: 1, isOnlyMultiplier: false };
-    }
-
-    if (/^\*(\d+)$/.test(trimmed)) {
-        const qty = parseInt(trimmed.slice(1), 10);
-        return { query: '', qty: Math.max(1, qty), isOnlyMultiplier: true };
-    }
-    if (/^(\d+)\*$/.test(trimmed)) {
-        const qty = parseInt(trimmed.slice(0, -1), 10);
-        return { query: '', qty: Math.max(1, qty), isOnlyMultiplier: true };
-    }
-
-    const prefixMatch = trimmed.match(/^(\d+)\*(.+)$/);
-    if (prefixMatch) {
-        const qty = parseInt(prefixMatch[1], 10);
-        const { query, uomHint } = extractUomAndQuery(prefixMatch[2]);
-        return {
-            query,
-            qty: Math.max(1, qty),
-            uomHint,
-            isOnlyMultiplier: false,
-        };
-    }
-
-    const suffixMatch = trimmed.match(/^(.+)\*(\d+)$/);
-    if (suffixMatch) {
-        const qty = parseInt(suffixMatch[2], 10);
-        const { query, uomHint } = extractUomAndQuery(suffixMatch[1]);
-        return {
-            query,
-            qty: Math.max(1, qty),
-            uomHint,
-            isOnlyMultiplier: false,
-        };
-    }
-
-    const { query, uomHint } = extractUomAndQuery(trimmed);
-    return {
-        query,
-        qty: 1,
-        uomHint,
-        isOnlyMultiplier: false,
-    };
-}
-
-/**
- * Finds best matching UOM for a product.
- * In Procurement / Inbound orders, defaults to largest packaging tier (e.g. Case or Box) rather than Piece.
- */
-function findMatchingUom(product: Product, uomHint?: string): ProductUom | undefined {
-    if (!product.uoms || product.uoms.length === 0) return undefined;
-    if (!uomHint) {
-        // Smart Procurement Default: Highest packaging tier (largest conversion_factor)
-        return [...product.uoms].sort((a, b) => b.conversion_factor - a.conversion_factor)[0];
-    }
-    const cleanHint = uomHint.toUpperCase();
-
-    // 1. Exact name match
-    const exact = product.uoms.find((u) => u.name.toUpperCase() === cleanHint);
-    if (exact) return exact;
-
-    // 2. Common abbreviation aliases
-    const aliases: Record<string, string[]> = {
-        CS: ['CASE', 'CARTON', 'CTN'],
-        CASE: ['CASE', 'CARTON', 'CTN'],
-        CTN: ['CARTON', 'CASE'],
-        BX: ['BOX'],
-        BOX: ['BOX'],
-        PK: ['PACK', 'PKG'],
-        PACK: ['PACK', 'PKG'],
-        PC: ['PIECE', 'PCS', 'EACH', 'EA'],
-        PCS: ['PIECE', 'PCS', 'EACH', 'EA'],
-        EA: ['PIECE', 'PCS', 'EACH', 'EA'],
-        PL: ['PALLET', 'PLT'],
-        PALLET: ['PALLET', 'PLT'],
-    };
-
-    const targetNames = aliases[cleanHint] || [cleanHint];
-    const aliasMatch = product.uoms.find((u) =>
-        targetNames.some((alias) => u.name.toUpperCase().includes(alias))
-    );
-    if (aliasMatch) return aliasMatch;
-
-    const partialMatch = product.uoms.find((u) =>
-        u.name.toUpperCase().startsWith(cleanHint)
-    );
-    if (partialMatch) return partialMatch;
-
-    return [...product.uoms].sort((a, b) => b.conversion_factor - a.conversion_factor)[0];
 }
 
 export default function CreatePurchaseOrderPage({
@@ -319,11 +53,17 @@ export default function CreatePurchaseOrderPage({
 }: Props) {
     // Rapid Punch Console & Catalog State
     const [scannerInput, setScannerInput] = useState<string>('');
-    const [scannerFeedback, setScannerFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [scannerFeedback, setScannerFeedback] = useState<ScannerFeedback | null>(null);
     const [pendingMultiplier, setPendingMultiplier] = useState<number>(1);
+    const [pendingUomHint, setPendingUomHint] = useState<string | undefined>(undefined);
     const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
     const [catalogActiveIndex, setCatalogActiveIndex] = useState<number>(-1);
+    const [catalogSelectedUoms, setCatalogSelectedUoms] = useState<Record<number, number>>({});
+    const [uomPromptProduct, setUomPromptProduct] = useState<{ product: Product; qty: number } | null>(null);
     const scannerInputRef = useRef<HTMLInputElement>(null);
+
+    // Fast O(1) indexed products map
+    const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
     // Purchase Order Details State
     const [orderSupplierId, setOrderSupplierId] = useState<number>(
@@ -337,9 +77,9 @@ export default function CreatePurchaseOrderPage({
     );
     const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>('');
     const [supplierReference, setSupplierReference] = useState<string>('');
-    const [taxType, setTaxType] = useState<'VAT_EXCLUSIVE' | 'VAT_INCLUSIVE' | 'NON_VAT'>('NON_VAT');
+    const [taxType, setTaxType] = useState<OrderTaxType>('NON_VAT');
     const [orderNotes, setOrderNotes] = useState<string>('');
-    const [lines, setLines] = useState<NewPoLineItem[]>([]);
+    const [lines, setLines] = useState<PoLineItem[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Sequential Overall PO Discount Pipeline Steps
@@ -381,13 +121,6 @@ export default function CreatePurchaseOrderPage({
         });
     };
 
-    // Helper: Stock on Hand for product at destination warehouse
-    const getProductSoh = (prod: Product, locId: number): number => {
-        if (!prod.balances) return 0;
-        const bal = prod.balances.find((b) => b.location_id === locId);
-        return bal ? bal.current_qty : 0;
-    };
-
     // Auto-focus punch input on mount
     useEffect(() => {
         setTimeout(() => {
@@ -400,7 +133,7 @@ export default function CreatePurchaseOrderPage({
         if (lines.length > 0) {
             setLines((prev) =>
                 prev.map((l) => {
-                    const prod = products.find((p) => p.id === l.product_id);
+                    const prod = productsById.get(l.product_id);
                     return {
                         ...l,
                         stock_on_hand: prod ? getProductSoh(prod, orderLocationId) : 0,
@@ -408,33 +141,35 @@ export default function CreatePurchaseOrderPage({
                 })
             );
         }
-    }, [orderLocationId]);
+    }, [orderLocationId, productsById]);
 
-    // Categories for filter tabs
-    const availableCategories = [
-        'ALL',
-        ...Array.from(new Set(products.map((p) => p.category || 'General'))).sort(),
-    ];
+    // Categories for filter tabs (memoized)
+    const availableCategories = useMemo(
+        () => ['ALL', ...Array.from(new Set(products.map((p) => p.category || 'General'))).sort()],
+        [products]
+    );
 
-    // Filtered products for catalog browsing & punch matching
+    // Filtered products for catalog browsing & punch matching (memoized)
     const parsedPunch = parsePunchQuery(scannerInput);
     const activeSearchQuery = parsedPunch.query.toLowerCase();
 
-    const catalogFilteredProducts = products.filter((p) => {
-        const matchesCategory =
-            selectedCategory === 'ALL' ||
-            (p.category || 'General').toLowerCase() === selectedCategory.toLowerCase();
+    const catalogFilteredProducts = useMemo(() => {
+        return products.filter((p) => {
+            const matchesCategory =
+                selectedCategory === 'ALL' ||
+                (p.category || 'General').toLowerCase() === selectedCategory.toLowerCase();
 
-        if (!matchesCategory) return false;
-        if (!activeSearchQuery) return true;
+            if (!matchesCategory) return false;
+            if (!activeSearchQuery) return true;
 
-        return (
-            p.sku.toLowerCase().includes(activeSearchQuery) ||
-            p.name.toLowerCase().includes(activeSearchQuery) ||
-            (p.category && p.category.toLowerCase().includes(activeSearchQuery)) ||
-            (p.uoms && p.uoms.some((u) => u.barcode && u.barcode.toLowerCase().includes(activeSearchQuery)))
-        );
-    });
+            return (
+                p.sku.toLowerCase().includes(activeSearchQuery) ||
+                p.name.toLowerCase().includes(activeSearchQuery) ||
+                (p.category && p.category.toLowerCase().includes(activeSearchQuery)) ||
+                (p.uoms && p.uoms.some((u) => u.barcode && u.barcode.toLowerCase().includes(activeSearchQuery)))
+            );
+        });
+    }, [products, selectedCategory, activeSearchQuery]);
 
     // Add product & UOM to active order lines
     const addProductToOrder = (product: Product, specificUom?: ProductUom, qty: number = 1, uomHint?: string) => {
@@ -468,7 +203,7 @@ export default function CreatePurchaseOrderPage({
                 return next;
             }
 
-            const newLine: NewPoLineItem = {
+            const newLine: PoLineItem = {
                 product_id: product.id,
                 product_sku: product.sku,
                 product_name: product.name,
@@ -476,14 +211,7 @@ export default function CreatePurchaseOrderPage({
                 product_uom_id: targetUom.id,
                 conversion_factor: targetUom.conversion_factor,
                 ordered_qty: qty,
-                unit_cost: targetUom.price_cents !== null && targetUom.price_cents !== undefined
-                    ? (targetUom.price_cents / 100).toFixed(2)
-                    : (() => {
-                          const baseUom = product.uoms?.find((u) => u.is_base_unit || u.conversion_factor === 1);
-                          return baseUom?.price_cents
-                              ? ((baseUom.price_cents * targetUom.conversion_factor) / 100).toFixed(2)
-                              : '100.00';
-                      })(),
+                unit_cost: computeUomPrice(product, targetUom),
                 discount_type: 'PERCENTAGE',
                 discount_percent_formula: '0',
                 discount_fixed_amount: '0.00',
@@ -510,19 +238,56 @@ export default function CreatePurchaseOrderPage({
 
         if (parsed.isOnlyMultiplier) {
             setPendingMultiplier(parsed.qty);
+            setPendingUomHint(parsed.uomHint);
             setScannerInput('');
             setScannerFeedback({
                 type: 'success',
-                message: `Active Multiplier set to x${parsed.qty} for next scan/click`,
+                message: parsed.uomHint
+                    ? `Active Multiplier set to ${parsed.qty} ${parsed.uomHint} for next scan/click`
+                    : `Active Multiplier set to x${parsed.qty} for next scan/click`,
             });
             setTimeout(() => setScannerFeedback(null), 3000);
             return;
         }
 
-        const query = parsed.query;
-        if (!query) return;
-
+        const query = parsed.query.trim();
         const effectiveQty = parsed.qty * (pendingMultiplier > 1 ? pendingMultiplier : 1);
+        const effectiveUomHint = parsed.uomHint || pendingUomHint;
+
+        if (!query) {
+            if (catalogFilteredProducts.length > 0) {
+                const target =
+                    catalogActiveIndex >= 0 && catalogActiveIndex < catalogFilteredProducts.length
+                        ? catalogFilteredProducts[catalogActiveIndex]
+                        : catalogFilteredProducts[0];
+
+                const chosenCatalogUom = catalogSelectedUoms[target.id]
+                    ? target.uoms?.find((u) => u.id === catalogSelectedUoms[target.id])
+                    : undefined;
+
+                if (chosenCatalogUom) {
+                    addProductToOrder(target, chosenCatalogUom, effectiveQty);
+                    setPendingMultiplier(1);
+                    setPendingUomHint(undefined);
+                    setScannerInput('');
+                    return;
+                }
+
+                if (target.uoms && target.uoms.length > 1 && !effectiveUomHint) {
+                    setUomPromptProduct({ product: target, qty: effectiveQty });
+                    setPendingMultiplier(1);
+                    setPendingUomHint(undefined);
+                    setScannerInput('');
+                    return;
+                }
+
+                addProductToOrder(target, undefined, effectiveQty, effectiveUomHint);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+            }
+            return;
+        }
 
         // 1. Exact barcode match
         for (const p of products) {
@@ -532,6 +297,7 @@ export default function CreatePurchaseOrderPage({
             if (u) {
                 addProductToOrder(p, u, effectiveQty);
                 setPendingMultiplier(1);
+                setPendingUomHint(undefined);
                 setScannerInput('');
                 return;
             }
@@ -542,8 +308,33 @@ export default function CreatePurchaseOrderPage({
             (p) => p.sku.trim().toLowerCase() === query.toLowerCase()
         );
         if (exactSku) {
-            addProductToOrder(exactSku, undefined, effectiveQty, parsed.uomHint);
+            if (effectiveUomHint) {
+                addProductToOrder(exactSku, undefined, effectiveQty, effectiveUomHint);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+            const chosenCatalogUom = catalogSelectedUoms[exactSku.id]
+                ? exactSku.uoms?.find((u) => u.id === catalogSelectedUoms[exactSku.id])
+                : undefined;
+            if (chosenCatalogUom) {
+                addProductToOrder(exactSku, chosenCatalogUom, effectiveQty);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+            if (exactSku.uoms && exactSku.uoms.length > 1) {
+                setUomPromptProduct({ product: exactSku, qty: effectiveQty });
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+            addProductToOrder(exactSku, undefined, effectiveQty);
             setPendingMultiplier(1);
+            setPendingUomHint(undefined);
             setScannerInput('');
             return;
         }
@@ -554,8 +345,38 @@ export default function CreatePurchaseOrderPage({
                 catalogActiveIndex >= 0 && catalogActiveIndex < catalogFilteredProducts.length
                     ? catalogFilteredProducts[catalogActiveIndex]
                     : catalogFilteredProducts[0];
-            addProductToOrder(target, undefined, effectiveQty, parsed.uomHint);
+
+            if (effectiveUomHint) {
+                addProductToOrder(target, undefined, effectiveQty, effectiveUomHint);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+
+            const chosenCatalogUom = catalogSelectedUoms[target.id]
+                ? target.uoms?.find((u) => u.id === catalogSelectedUoms[target.id])
+                : undefined;
+
+            if (chosenCatalogUom) {
+                addProductToOrder(target, chosenCatalogUom, effectiveQty);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+
+            if (target.uoms && target.uoms.length > 1) {
+                setUomPromptProduct({ product: target, qty: effectiveQty });
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+
+            addProductToOrder(target, undefined, effectiveQty);
             setPendingMultiplier(1);
+            setPendingUomHint(undefined);
             setScannerInput('');
         } else {
             setScannerFeedback({
@@ -584,14 +405,17 @@ export default function CreatePurchaseOrderPage({
             setScannerInput('');
             setCatalogActiveIndex(-1);
             setPendingMultiplier(1);
+            setPendingUomHint(undefined);
         }
     };
 
-    const handleCatalogRowClick = (prod: Product) => {
+    const handleCatalogRowClick = (prod: Product, specificUom?: ProductUom) => {
         const parsed = parsePunchQuery(scannerInput);
         const effectiveQty = parsed.qty * (pendingMultiplier > 1 ? pendingMultiplier : 1);
-        addProductToOrder(prod, undefined, effectiveQty);
+        const effectiveUomHint = parsed.uomHint || pendingUomHint;
+        addProductToOrder(prod, specificUom, effectiveQty, effectiveUomHint);
         setPendingMultiplier(1);
+        setPendingUomHint(undefined);
         setScannerInput('');
     };
 
@@ -601,7 +425,7 @@ export default function CreatePurchaseOrderPage({
 
     const updateLine = (
         index: number,
-        fieldOrUpdates: keyof NewPoLineItem | Partial<NewPoLineItem>,
+        fieldOrUpdates: keyof PoLineItem | Partial<PoLineItem>,
         val?: unknown
     ) => {
         setLines((prev) => {
@@ -609,30 +433,50 @@ export default function CreatePurchaseOrderPage({
             const current = next[index];
             if (!current) return prev;
 
-            const partial: Partial<NewPoLineItem> =
+            const partial: Partial<PoLineItem> =
                 typeof fieldOrUpdates === 'string'
                     ? { [fieldOrUpdates]: val }
                     : fieldOrUpdates;
 
-            const updated = { ...current, ...partial };
-
             if ('product_uom_id' in partial && partial.product_uom_id !== undefined) {
-                const prod = products.find((p) => p.id === updated.product_id);
-                const uom = prod?.uoms?.find((u) => u.id === Number(partial.product_uom_id));
-                if (uom) {
-                    updated.conversion_factor = uom.conversion_factor;
-                    if (uom.price_cents !== null && uom.price_cents !== undefined) {
-                        updated.unit_cost = (uom.price_cents / 100).toFixed(2);
-                    } else {
-                        const baseUom = prod?.uoms?.find((u) => u.is_base_unit || u.conversion_factor === 1);
-                        if (baseUom?.price_cents) {
-                            updated.unit_cost = ((baseUom.price_cents * uom.conversion_factor) / 100).toFixed(2);
-                        }
-                    }
+                const targetUomId = Number(partial.product_uom_id);
+                // Check if another line in this order already has this product with the newly selected UOM
+                const existingSameUomIdx = prev.findIndex(
+                    (l, i) => i !== index && l.product_id === current.product_id && l.product_uom_id === targetUomId
+                );
+
+                if (existingSameUomIdx !== -1) {
+                    const existingLine = next[existingSameUomIdx];
+                    const mergedQty = existingLine.ordered_qty + current.ordered_qty;
+                    next[existingSameUomIdx] = {
+                        ...existingLine,
+                        ordered_qty: mergedQty,
+                    };
+                    next.splice(index, 1);
+
+                    const prod = productsById.get(current.product_id);
+                    const uom = prod?.uoms?.find((u) => u.id === targetUomId);
+                    setScannerFeedback({
+                        type: 'success',
+                        message: `Merged into existing ${current.product_name} (${uom?.name || 'Unit'}) line (total: ${mergedQty} pkgs)`,
+                    });
+                    setTimeout(() => setScannerFeedback(null), 3000);
+                    return next;
                 }
+
+                const prod = productsById.get(current.product_id);
+                const uom = prod?.uoms?.find((u) => u.id === targetUomId);
+                const updated = { ...current, ...partial };
+                if (uom) {
+                    updated.product_uom_id = targetUomId;
+                    updated.conversion_factor = uom.conversion_factor;
+                    updated.unit_cost = prod ? computeUomPrice(prod, uom) : '100.00';
+                }
+                next[index] = updated;
+                return next;
             }
 
-            next[index] = updated;
+            next[index] = { ...current, ...partial };
             return next;
         });
     };
@@ -756,7 +600,7 @@ export default function CreatePurchaseOrderPage({
             lines: payloadLines,
         };
 
-        router.post('/procurement/orders', payload, {
+        router.post(store.url(), payload, {
             onFinish: () => setIsSubmitting(false),
         });
     };
@@ -798,7 +642,7 @@ export default function CreatePurchaseOrderPage({
                                 </button>
                             )}
                             <Link
-                                href="/procurement/orders"
+                                href={index.url()}
                                 className="inline-flex h-8 items-center px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 transition-colors"
                             >
                                 Cancel
@@ -977,20 +821,15 @@ export default function CreatePurchaseOrderPage({
                                             catalogFilteredProducts.map((p, idx) => {
                                                 const soh = getProductSoh(p, orderLocationId);
                                                 const defaultUom = findMatchingUom(p);
-                                                const unitCost = defaultUom?.price_cents !== null && defaultUom?.price_cents !== undefined
-                                                    ? (defaultUom.price_cents / 100).toFixed(2)
-                                                    : (() => {
-                                                          const baseUom = p.uoms?.find((u) => u.is_base_unit || u.conversion_factor === 1);
-                                                          return baseUom?.price_cents
-                                                              ? ((baseUom.price_cents * (defaultUom?.conversion_factor || 1)) / 100).toFixed(2)
-                                                              : '100.00';
-                                                      })();
+                                                const selectedUomId = catalogSelectedUoms[p.id];
+                                                const activeUom = (selectedUomId ? p.uoms?.find((u) => u.id === selectedUomId) : undefined) || defaultUom;
+                                                const unitCost = computeUomPrice(p, activeUom);
                                                 const isHighlighted = idx === catalogActiveIndex;
 
                                                 return (
                                                     <tr
                                                         key={p.id}
-                                                        onClick={() => handleCatalogRowClick(p)}
+                                                        onClick={() => handleCatalogRowClick(p, activeUom)}
                                                         className={`cursor-pointer transition-colors ${
                                                             isHighlighted
                                                                 ? 'bg-brand/10 dark:bg-brand/20 ring-1 ring-inset ring-brand'
@@ -1021,13 +860,36 @@ export default function CreatePurchaseOrderPage({
                                                             </div>
                                                         </td>
 
-                                                        {/* Packaging UOM */}
+                                                        {/* Packaging UOM with Interactive Selector */}
                                                         <td className="px-3 py-2 align-middle">
-                                                            {defaultUom ? (
+                                                            {p.uoms && p.uoms.length > 1 ? (
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <select
+                                                                        value={activeUom?.id}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onChange={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const newId = Number(e.target.value);
+                                                                            setCatalogSelectedUoms((prev) => ({ ...prev, [p.id]: newId }));
+                                                                        }}
+                                                                        className="h-7 w-fit min-w-[100px] max-w-[130px] rounded border border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-800 shadow-2xs focus:border-brand focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 cursor-pointer"
+                                                                        title="Choose packaging unit to punch"
+                                                                    >
+                                                                        {p.uoms.map((u) => (
+                                                                            <option key={u.id} value={u.id}>
+                                                                                {u.name} (x{u.conversion_factor})
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <span className="text-[10px] text-slate-400">
+                                                                        {p.uoms.length} pkgs available
+                                                                    </span>
+                                                                </div>
+                                                            ) : activeUom ? (
                                                                 <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300">
-                                                                    {defaultUom.name}{' '}
+                                                                    {activeUom.name}{' '}
                                                                     <span className="text-slate-400">
-                                                                        (x{defaultUom.conversion_factor})
+                                                                        (x{activeUom.conversion_factor})
                                                                     </span>
                                                                 </div>
                                                             ) : (
@@ -1059,12 +921,12 @@ export default function CreatePurchaseOrderPage({
                                                                 type="button"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    handleCatalogRowClick(p);
+                                                                    handleCatalogRowClick(p, activeUom);
                                                                 }}
                                                                 className="inline-flex h-7 items-center gap-1 rounded-md bg-brand/10 hover:bg-brand px-2 text-[11px] font-medium text-brand hover:text-white transition-colors"
                                                             >
                                                                 <PlusIcon className="h-3 w-3" />
-                                                                <span>{pendingMultiplier > 1 ? `x${pendingMultiplier}` : 'Add'}</span>
+                                                                <span>{pendingMultiplier > 1 || pendingUomHint ? `x${pendingMultiplier}${pendingUomHint ? ` ${pendingUomHint}` : ''}` : 'Add'}</span>
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -1084,12 +946,15 @@ export default function CreatePurchaseOrderPage({
                                     <span className="text-xs font-semibold uppercase tracking-wider text-slate-200">
                                         Punch & Scanner Console
                                     </span>
-                                    {pendingMultiplier > 1 && (
+                                    {(pendingMultiplier > 1 || pendingUomHint) && (
                                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold">
-                                            <span>Multiplier: x{pendingMultiplier}</span>
+                                            <span>Multiplier: x{pendingMultiplier}{pendingUomHint ? ` (${pendingUomHint})` : ''}</span>
                                             <button
                                                 type="button"
-                                                onClick={() => setPendingMultiplier(1)}
+                                                onClick={() => {
+                                                    setPendingMultiplier(1);
+                                                    setPendingUomHint(undefined);
+                                                }}
                                                 className="p-0.5 hover:text-white"
                                                 title="Reset multiplier to 1"
                                             >
@@ -1118,7 +983,7 @@ export default function CreatePurchaseOrderPage({
                                         setCatalogActiveIndex(-1);
                                     }}
                                     onKeyDown={handleScannerKeyDown}
-                                    placeholder="Scan barcode, punch SKU, or set quantity (e.g. 3*SKU, *3, or filter)..."
+                                    placeholder="Scan barcode, punch SKU, or set quantity (e.g. 5bx*SKU, 5pc*SKU, 3*SKU, *3, or filter)..."
                                     className="h-10 w-full rounded-lg border border-slate-700 bg-slate-950 pl-10 pr-24 text-xs text-white placeholder-slate-400 focus:border-brand focus:outline-hidden focus:ring-2 focus:ring-brand/30"
                                     autoComplete="off"
                                 />
@@ -1171,8 +1036,10 @@ export default function CreatePurchaseOrderPage({
                                     <span>Set multiplier</span>
                                 </div>
                                 <div className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">5bx*SKU</kbd>
+                                    <span>or</span>
                                     <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">3*SKU</kbd>
-                                    <span>Punch quantity</span>
+                                    <span>Punch with UOM</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">↑/↓</kbd>
@@ -1252,7 +1119,7 @@ export default function CreatePurchaseOrderPage({
                                                 const lineGross = grossCost * line.ordered_qty;
 
                                                 return (
-                                                    <tr key={idx} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
+                                                    <tr key={`${line.product_id}-${line.product_uom_id}-${idx}`} className="hover:bg-slate-50/70 dark:hover:bg-slate-800/50 transition-colors">
                                                         <td className="px-3 py-2 text-center text-slate-400 font-mono text-xs">
                                                             {idx + 1}
                                                         </td>
@@ -1267,31 +1134,43 @@ export default function CreatePurchaseOrderPage({
                                                                 <span>{line.product_category}</span>
                                                                 <span>• SOH: {line.stock_on_hand} pcs</span>
                                                             </div>
+                                                            {(() => {
+                                                                const unused = availableUoms.filter(
+                                                                    (u) => !lines.some((l) => l.product_id === line.product_id && l.product_uom_id === u.id)
+                                                                );
+                                                                if (unused.length === 0) return null;
+                                                                return (
+                                                                    <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                                                        <span className="text-[10px] text-slate-400">Also add:</span>
+                                                                        {unused.map((extraUom) => (
+                                                                            <button
+                                                                                key={extraUom.id}
+                                                                                type="button"
+                                                                                onClick={() => prod && addProductToOrder(prod, extraUom, 1)}
+                                                                                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-brand/10 text-brand hover:bg-brand hover:text-white transition-colors"
+                                                                                title={`Add ${extraUom.name} (x${extraUom.conversion_factor}) line to order`}
+                                                                            >
+                                                                                <PlusIcon className="h-2.5 w-2.5" />
+                                                                                <span>{extraUom.name}</span>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </td>
-                                                        <td className="px-3 py-2">
-                                                            <div className="flex flex-wrap items-center gap-1">
-                                                                {availableUoms.map((u) => {
-                                                                    const isSelected = u.id === line.product_uom_id;
-                                                                    return (
-                                                                        <button
-                                                                            key={u.id}
-                                                                            type="button"
-                                                                            onClick={() => updateLine(idx, 'product_uom_id', u.id)}
-                                                                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                                                                                isSelected
-                                                                                    ? 'bg-brand text-white shadow-xs'
-                                                                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                                                                            }`}
-                                                                            title={`Packaging Unit: ${u.name} (Multiplier: x${u.conversion_factor})`}
-                                                                        >
-                                                                            <span>{u.name}</span>
-                                                                            <span className={`text-[10px] font-mono ${isSelected ? 'text-white/80' : 'text-slate-400'}`}>
-                                                                                (x{u.conversion_factor})
-                                                                            </span>
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
+                                                        <td className="px-3 py-2 align-middle">
+                                                            <select
+                                                                value={line.product_uom_id}
+                                                                onChange={(e) => updateLine(idx, 'product_uom_id', Number(e.target.value))}
+                                                                className="h-8 w-full min-w-[100px] max-w-[130px] rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-brand focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 cursor-pointer"
+                                                                title="Select packaging unit"
+                                                            >
+                                                                {availableUoms.map((u) => (
+                                                                    <option key={u.id} value={u.id}>
+                                                                        {u.name} (x{u.conversion_factor})
+                                                                    </option>
+                                                                ))}
+                                                            </select>
                                                         </td>
                                                         <td className="px-3 py-2 text-center">
                                                             <input
@@ -1659,6 +1538,17 @@ export default function CreatePurchaseOrderPage({
                     </div>
                 </div>
             </form>
+
+            {/* Packaging Unit Selection Modal for Multiple UOMs */}
+            <UomSelectionModal
+                prompt={uomPromptProduct}
+                lines={lines}
+                onSelect={(product, uom, qty) => {
+                    addProductToOrder(product, uom, qty);
+                    setUomPromptProduct(null);
+                }}
+                onClose={() => setUomPromptProduct(null)}
+            />
         </AppLayout>
     );
 }

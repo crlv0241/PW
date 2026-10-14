@@ -8,6 +8,7 @@ use App\Models\ProductUom;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderLine;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 final class CreatePurchaseOrderAction
 {
@@ -50,21 +51,33 @@ final class CreatePurchaseOrderAction
                 ->lockForUpdate()
                 ->first();
 
-            $sequence = $latestPo !== null ? ((int) substr($latestPo->po_number, -4)) + 1 : 1;
+            $sequence = 1;
+            if ($latestPo !== null && preg_match('/-(\d+)$/', $latestPo->po_number, $matches)) {
+                $sequence = ((int) $matches[1]) + 1;
+            }
             $poNumber = sprintf('PO-%s-%04d', $year, $sequence);
 
             $subtotalCents = 0;
             $discountCents = 0;
             $totalCents = 0;
 
+            // Pre-fetch all referenced ProductUoms in one single query to eliminate N+1 queries
+            $uomIds = array_unique(array_map(fn (array $l) => (int) $l['product_uom_id'], $data['lines']));
+            $uoms = ProductUom::query()
+                ->whereIn('id', $uomIds)
+                ->get()
+                ->keyBy('id');
+
             /** @var list<array<string, mixed>> $computedLines */
             $computedLines = [];
 
             foreach ($data['lines'] as $lineInput) {
-                $uom = ProductUom::query()
-                    ->where('id', $lineInput['product_uom_id'])
-                    ->where('product_id', $lineInput['product_id'])
-                    ->firstOrFail();
+                $uom = $uoms->get($lineInput['product_uom_id']);
+                if ($uom === null || $uom->product_id !== (int) $lineInput['product_id']) {
+                    throw ValidationException::withMessages([
+                        'lines' => [sprintf('Product UOM ID %d does not match Product ID %d.', $lineInput['product_uom_id'], $lineInput['product_id'])],
+                    ]);
+                }
 
                 $conversionFactor = max(1, $uom->conversion_factor);
                 $orderedQty = max(1, $lineInput['ordered_qty']);

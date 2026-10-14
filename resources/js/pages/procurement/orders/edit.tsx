@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { AppLayout } from '../../../layouts/app-layout';
 import { Combobox } from '../../../components/ui/combobox';
@@ -25,6 +25,22 @@ import type {
     ProductUom,
     PurchaseOrder,
 } from '../../../types/pos';
+import type {
+    PoLineItem,
+    OrderDiscountStep,
+    ScannerFeedback,
+    OrderTaxType,
+} from './order-types';
+import {
+    computeDiscount,
+    computeDiscountPipeline,
+    parsePunchQuery,
+    findMatchingUom,
+    getProductSoh,
+    computeUomPrice,
+} from './order-math';
+import { UomSelectionModal } from './components/uom-selection-modal';
+import { update, index } from '@/actions/App/Http/Controllers/Procurement/PurchaseOrderController';
 
 interface Props {
     order: PurchaseOrder;
@@ -33,144 +49,10 @@ interface Props {
     products: Product[];
 }
 
-interface NewPoLineItem {
-    product_id: number;
-    product_sku: string;
-    product_name: string;
-    product_category: string;
-    product_uom_id: number;
-    conversion_factor: number;
-    ordered_qty: number;
-    unit_cost: string;
-    discount_type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'COMPOUND';
-    discount_percent_formula: string;
-    discount_fixed_amount: string;
-    stock_on_hand: number;
-}
-
-interface OrderDiscountStep {
-    id: string;
-    type: 'PERCENT' | 'FIXED';
-    value: string;
-}
-
-interface ParsedPunch {
-    query: string;
-    qty: number;
-    isOnlyMultiplier: boolean;
-}
-
-/**
- * Pure deterministic discount calculator for individual packaging units.
- */
-function computeDiscount(
-    grossCost: number,
-    type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'COMPOUND',
-    formula: string,
-    fixedAmount: string
-): { unitDiscount: number; effectivePct: number } {
-    if (grossCost <= 0) return { unitDiscount: 0, effectivePct: 0 };
-
-    if (type === 'FIXED_AMOUNT') {
-        const fixed = parseFloat(fixedAmount) || 0;
-        const unitDiscount = Math.min(grossCost, Math.max(0, fixed));
-        const effectivePct = grossCost > 0 ? unitDiscount / grossCost : 0;
-        return { unitDiscount, effectivePct };
-    }
-
-    if (type === 'COMPOUND') {
-        const tiers = (formula || '')
-            .split('+')
-            .map((s) => parseFloat(s.trim()))
-            .filter((n) => !isNaN(n) && n > 0 && n <= 100);
-
-        let remaining = grossCost;
-        for (const ratePct of tiers) {
-            const stepDiscount = remaining * (ratePct / 100);
-            remaining = Math.max(0, remaining - stepDiscount);
-        }
-
-        const fixed = parseFloat(fixedAmount) || 0;
-        remaining = Math.max(0, remaining - fixed);
-
-        const unitDiscount = Math.max(0, grossCost - remaining);
-        const effectivePct = grossCost > 0 ? unitDiscount / grossCost : 0;
-        return { unitDiscount, effectivePct };
-    }
-
-    // Standard PERCENTAGE or Stacked formula (e.g. "10+5+2")
-    const tiers = (formula || '')
-        .split('+')
-        .map((s) => parseFloat(s.trim()))
-        .filter((n) => !isNaN(n) && n > 0 && n <= 100);
-
-    if (tiers.length === 0) {
-        return { unitDiscount: 0, effectivePct: 0 };
-    }
-
-    let remaining = grossCost;
-    for (const ratePct of tiers) {
-        const stepDiscount = remaining * (ratePct / 100);
-        remaining = Math.max(0, remaining - stepDiscount);
-    }
-
-    const unitDiscount = Math.max(0, grossCost - remaining);
-    const effectivePct = grossCost > 0 ? unitDiscount / grossCost : 0;
-    return { unitDiscount, effectivePct };
-}
-
-/**
- * Computes an ordered sequence of discounts (percentage and fixed deductions)
- */
-function computeDiscountPipeline(
-    grossPayable: number,
-    steps: OrderDiscountStep[]
-): {
-    totalDiscount: number;
-    finalNet: number;
-    breakdown: Array<{ stepId: string; type: 'PERCENT' | 'FIXED'; value: number; discount: number; resultingRemaining: number }>;
-    formula: string;
-} {
-    let remaining = Math.max(0, grossPayable);
-    let totalDiscount = 0;
-    const breakdown: Array<{ stepId: string; type: 'PERCENT' | 'FIXED'; value: number; discount: number; resultingRemaining: number }> = [];
-    const formulaTokens: string[] = [];
-
-    for (const step of steps) {
-        const val = parseFloat(step.value);
-        if (isNaN(val) || val <= 0) continue;
-
-        let stepDiscount = 0;
-        if (step.type === 'PERCENT') {
-            const rate = Math.min(1, Math.max(0, val / 100));
-            stepDiscount = remaining * rate;
-            formulaTokens.push(`${val}%`);
-        } else {
-            stepDiscount = Math.min(remaining, Math.max(0, val));
-            formulaTokens.push(`₱${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-        }
-
-        remaining = Math.max(0, remaining - stepDiscount);
-        totalDiscount += stepDiscount;
-
-        breakdown.push({
-            stepId: step.id,
-            type: step.type,
-            value: val,
-            discount: stepDiscount,
-            resultingRemaining: remaining,
-        });
-    }
-
-    return {
-        totalDiscount,
-        finalNet: remaining,
-        breakdown,
-        formula: formulaTokens.join(' → '),
-    };
-}
-
 export default function EditPurchaseOrderPage({ order, suppliers, locations, products }: Props) {
+    // Fast O(1) indexed lookup for products catalog
+    const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+
     // Top document details
     const [orderSupplierId, setOrderSupplierId] = useState<number>(order.supplier_id || (suppliers[0]?.id ?? 0));
     const [orderLocationId, setOrderLocationId] = useState<number>(order.destination_location_id || (locations[0]?.id ?? 0));
@@ -181,14 +63,14 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
     const [expectedDeliveryDate, setExpectedDeliveryDate] = useState<string>(
         order.expected_delivery_date ? order.expected_delivery_date.split('T')[0] : ''
     );
-    const [taxType, setTaxType] = useState<'VAT_EXCLUSIVE' | 'VAT_INCLUSIVE' | 'NON_VAT'>(order.tax_type ?? 'NON_VAT');
+    const [taxType, setTaxType] = useState<OrderTaxType>(order.tax_type ?? 'NON_VAT');
     const [orderNotes, setOrderNotes] = useState<string>(order.notes ?? '');
 
     // Initialize lines from existing order
-    const [lines, setLines] = useState<NewPoLineItem[]>(() => {
+    const [lines, setLines] = useState<PoLineItem[]>(() => {
         if (!order.lines || order.lines.length === 0) return [];
         return order.lines.map((l) => {
-            const catalogProd = products.find((p) => p.id === l.product_id);
+            const catalogProd = productsById.get(l.product_id);
             const soh = catalogProd?.balances?.reduce((sum, b) => sum + (b.current_qty || 0), 0) || 0;
 
             let discType: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'COMPOUND' = 'PERCENTAGE';
@@ -238,248 +120,399 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
         return [{ id: 'step-1', type: 'PERCENT', value: '' }];
     });
 
-    // Console State
+    // Rapid Punch Console & Catalog State
+    const [scannerInput, setScannerInput] = useState<string>('');
+    const [scannerFeedback, setScannerFeedback] = useState<ScannerFeedback | null>(null);
+    const [pendingMultiplier, setPendingMultiplier] = useState<number>(1);
+    const [pendingUomHint, setPendingUomHint] = useState<string | undefined>(undefined);
     const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
-    const [catalogSearch, setCatalogSearch] = useState<string>('');
-    const [stickyMultiplier, setStickyMultiplier] = useState<number | null>(null);
-    const [punchQuery, setPunchQuery] = useState<string>('');
-    const [punchMessage, setPunchMessage] = useState<{ text: string; type: 'success' | 'warning' | 'error' } | null>(null);
-    const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
+    const [catalogActiveIndex, setCatalogActiveIndex] = useState<number>(-1);
+    const [catalogSelectedUoms, setCatalogSelectedUoms] = useState<Record<number, number>>({});
+    const [uomPromptProduct, setUomPromptProduct] = useState<{ product: Product; qty: number } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-    const punchInputRef = useRef<HTMLInputElement>(null);
+    const scannerInputRef = useRef<HTMLInputElement>(null);
     const catalogTableContainerRef = useRef<HTMLDivElement>(null);
 
-    // Categories
-    const categories = ['ALL', ...Array.from(new Set(products.map((p) => p.category).filter(Boolean)))];
-
-    // Filtered Products
-    const filteredProducts = products.filter((prod) => {
-        const matchesCategory = selectedCategory === 'ALL' || prod.category === selectedCategory;
-        const matchesSearch =
-            !catalogSearch ||
-            prod.name.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-            prod.sku.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-            prod.uoms?.some((u) => u.barcode && u.barcode.toLowerCase().includes(catalogSearch.toLowerCase()));
-        return matchesCategory && matchesSearch;
-    });
-
-    // Auto-focus the punch input console on mount
+    // Auto-focus punch input on mount
     useEffect(() => {
-        punchInputRef.current?.focus();
+        setTimeout(() => {
+            scannerInputRef.current?.focus();
+        }, 100);
     }, []);
 
-    // Clear punch feedback after 3.5s
+    // Update SOH on lines when destination warehouse changes
     useEffect(() => {
-        if (!punchMessage) return;
-        const t = setTimeout(() => setPunchMessage(null), 3500);
-        return () => clearTimeout(t);
-    }, [punchMessage]);
-
-    // Parse punch query (e.g. "*3", "3*", "3*CAN-TUNA-180", or "CAN-TUNA-180*3")
-    const parsePunchQuery = (raw: string): ParsedPunch => {
-        const trimmed = raw.trim();
-        if (!trimmed) return { query: '', qty: 1, isOnlyMultiplier: false };
-
-        const prefixMatch = trimmed.match(/^(\d+)\s*\*\s*(.*)$/);
-        if (prefixMatch) {
-            const mult = parseInt(prefixMatch[1], 10) || 1;
-            const query = prefixMatch[2].trim();
-            return {
-                query,
-                qty: mult,
-                isOnlyMultiplier: query.length === 0,
-            };
+        if (lines.length > 0) {
+            setLines((prev) =>
+                prev.map((l) => {
+                    const prod = productsById.get(l.product_id);
+                    return {
+                        ...l,
+                        stock_on_hand: prod ? getProductSoh(prod, orderLocationId) : 0,
+                    };
+                })
+            );
         }
+    }, [orderLocationId, productsById]);
 
-        const altPrefixMatch = trimmed.match(/^\*\s*(\d+)\s*(.*)$/);
-        if (altPrefixMatch) {
-            const mult = parseInt(altPrefixMatch[1], 10) || 1;
-            const query = altPrefixMatch[2].trim();
-            return {
-                query,
-                qty: mult,
-                isOnlyMultiplier: query.length === 0,
-            };
-        }
+    // Categories for filter tabs memoized
+    const availableCategories = useMemo(
+        () => ['ALL', ...Array.from(new Set(products.map((p) => p.category || 'General'))).sort()],
+        [products]
+    );
 
-        const suffixMatch = trimmed.match(/^(.*?)\s*\*\s*(\d+)$/);
-        if (suffixMatch) {
-            const query = suffixMatch[1].trim();
-            const mult = parseInt(suffixMatch[2], 10) || 1;
-            return {
-                query,
-                qty: mult,
-                isOnlyMultiplier: false,
-            };
-        }
+    // Filtered products for catalog browsing & punch matching memoized
+    const parsedPunch = useMemo(() => parsePunchQuery(scannerInput), [scannerInput]);
+    const activeSearchQuery = parsedPunch.query.toLowerCase();
 
-        return {
-            query: trimmed,
-            qty: stickyMultiplier ?? 1,
-            isOnlyMultiplier: false,
-        };
-    };
+    const catalogFilteredProducts = useMemo(() => {
+        return products.filter((p) => {
+            const matchesCategory =
+                selectedCategory === 'ALL' ||
+                (p.category || 'General').toLowerCase() === selectedCategory.toLowerCase();
 
-    // Add or increment a product line
-    const addProductToOrder = (product: Product, quantityToAdd: number = 1, preferredUomId?: number) => {
-        if (quantityToAdd <= 0) return;
+            if (!matchesCategory) return false;
+            if (!activeSearchQuery) return true;
 
-        const uom = preferredUomId
-            ? product.uoms?.find((u) => u.id === preferredUomId) || product.uoms?.[0]
-            : product.uoms?.find((u) => u.is_base_unit) || product.uoms?.[0];
+            return (
+                p.sku.toLowerCase().includes(activeSearchQuery) ||
+                p.name.toLowerCase().includes(activeSearchQuery) ||
+                (p.category && p.category.toLowerCase().includes(activeSearchQuery)) ||
+                (p.uoms && p.uoms.some((u) => u.barcode && u.barcode.toLowerCase().includes(activeSearchQuery)))
+            );
+        });
+    }, [products, selectedCategory, activeSearchQuery]);
 
-        if (!uom) {
-            setPunchMessage({
-                text: `Cannot add ${product.sku}: No UOM packaging defined.`,
+    // Add product & UOM to active order lines
+    const addProductToOrder = (product: Product, specificUom?: ProductUom, qty: number = 1, uomHint?: string) => {
+        if (qty <= 0) return;
+        const targetUom = specificUom || findMatchingUom(product, uomHint);
+        if (!targetUom) {
+            setScannerFeedback({
                 type: 'error',
+                message: `Product ${product.name} has no packaging units defined.`,
             });
+            setTimeout(() => setScannerFeedback(null), 3500);
             return;
         }
 
-        const existingIdx = lines.findIndex(
-            (l) => l.product_id === product.id && l.product_uom_id === uom.id
-        );
+        const soh = getProductSoh(product, orderLocationId);
 
-        const soh = product.balances?.reduce((sum, b) => sum + (b.current_qty || 0), 0) || 0;
-        const initialCost = uom.price_cents ? (uom.price_cents / 100).toFixed(2) : '0.00';
+        setLines((prev) => {
+            const existingIdx = prev.findIndex(
+                (l) => l.product_id === product.id && l.product_uom_id === targetUom.id
+            );
 
-        if (existingIdx !== -1) {
-            setLines((prev) => {
+            if (existingIdx !== -1) {
                 const next = [...prev];
-                const cur = next[existingIdx];
+                const updatedQty = next[existingIdx].ordered_qty + qty;
                 next[existingIdx] = {
-                    ...cur,
-                    ordered_qty: cur.ordered_qty + quantityToAdd,
+                    ...next[existingIdx],
+                    ordered_qty: updatedQty,
                 };
+                setScannerFeedback({
+                    type: 'success',
+                    message: `Increased ${product.name} (${targetUom.name}) to ${updatedQty} pkgs`,
+                });
                 return next;
-            });
-            setPunchMessage({
-                text: `Incremented ${product.sku} by +${quantityToAdd} ${uom.name}.`,
-                type: 'success',
-            });
-        } else {
-            const newLine: NewPoLineItem = {
+            }
+
+            const initialCost = computeUomPrice(product, targetUom);
+
+            const newLine: PoLineItem = {
                 product_id: product.id,
                 product_sku: product.sku,
                 product_name: product.name,
                 product_category: product.category || 'General',
-                product_uom_id: uom.id,
-                conversion_factor: uom.conversion_factor,
-                ordered_qty: quantityToAdd,
+                product_uom_id: targetUom.id,
+                conversion_factor: targetUom.conversion_factor,
+                ordered_qty: qty,
                 unit_cost: initialCost,
                 discount_type: 'PERCENTAGE',
-                discount_percent_formula: '',
-                discount_fixed_amount: '',
+                discount_percent_formula: '0',
+                discount_fixed_amount: '0.00',
                 stock_on_hand: soh,
             };
-            setLines((prev) => [newLine, ...prev]);
-            setPunchMessage({
-                text: `Added ${product.sku} (${quantityToAdd} ${uom.name}) to active lines.`,
-                type: 'success',
-            });
-        }
 
-        if (stickyMultiplier !== null) {
-            setStickyMultiplier(null);
-        }
+            setScannerFeedback({
+                type: 'success',
+                message: `Added ${product.name} (${targetUom.name}) • ${qty} pkg(s)`,
+            });
+
+            return [newLine, ...prev];
+        });
+
+        setScannerInput('');
+        scannerInputRef.current?.focus();
+        setTimeout(() => setScannerFeedback(null), 3500);
     };
 
-    // Execute punch action from bottom console
-    const handlePunchSubmit = (e?: React.FormEvent) => {
+    // Punch submit (Barcode, Multiplier, Enter)
+    const handleScannerSubmit = (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        const parsed = parsePunchQuery(punchQuery);
+        const parsed = parsePunchQuery(scannerInput);
 
         if (parsed.isOnlyMultiplier) {
-            setStickyMultiplier(parsed.qty);
-            setPunchQuery('');
-            setPunchMessage({
-                text: `Sticky multiplier set: *${parsed.qty}. Next scanned or selected item will punch ${parsed.qty} qty.`,
+            setPendingMultiplier(parsed.qty);
+            setPendingUomHint(parsed.uomHint);
+            setScannerInput('');
+            setScannerFeedback({
                 type: 'success',
+                message: parsed.uomHint
+                    ? `Active Multiplier set to ${parsed.qty} ${parsed.uomHint} for next scan/click`
+                    : `Active Multiplier set to x${parsed.qty} for next scan/click`,
             });
+            setTimeout(() => setScannerFeedback(null), 3500);
+            scannerInputRef.current?.focus();
             return;
         }
 
-        if (!parsed.query) {
-            if (filteredProducts.length > 0 && activeRowIndex >= 0 && activeRowIndex < filteredProducts.length) {
-                const target = filteredProducts[activeRowIndex];
-                addProductToOrder(target, parsed.qty);
-                setPunchQuery('');
+        const query = parsed.query.trim();
+        const effectiveQty = parsed.qty * (pendingMultiplier > 1 ? pendingMultiplier : 1);
+        const effectiveUomHint = parsed.uomHint || pendingUomHint;
+
+        if (!query) {
+            if (catalogFilteredProducts.length > 0) {
+                const target =
+                    catalogActiveIndex >= 0 && catalogActiveIndex < catalogFilteredProducts.length
+                        ? catalogFilteredProducts[catalogActiveIndex]
+                        : catalogFilteredProducts[0];
+
+                const chosenCatalogUom = catalogSelectedUoms[target.id]
+                    ? target.uoms?.find((u) => u.id === catalogSelectedUoms[target.id])
+                    : undefined;
+
+                if (chosenCatalogUom) {
+                    addProductToOrder(target, chosenCatalogUom, effectiveQty);
+                    setPendingMultiplier(1);
+                    setPendingUomHint(undefined);
+                    setScannerInput('');
+                    return;
+                }
+
+                if (target.uoms && target.uoms.length > 1 && !effectiveUomHint) {
+                    setUomPromptProduct({ product: target, qty: effectiveQty });
+                    setPendingMultiplier(1);
+                    setPendingUomHint(undefined);
+                    setScannerInput('');
+                    return;
+                }
+
+                addProductToOrder(target, undefined, effectiveQty, effectiveUomHint);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
             }
             return;
         }
 
-        const exactBarcodeMatch = products.find((p) =>
-            p.uoms?.some((u) => u.barcode && u.barcode.toLowerCase() === parsed.query.toLowerCase())
-        );
-
-        if (exactBarcodeMatch) {
-            const matchedUom = exactBarcodeMatch.uoms?.find(
-                (u) => u.barcode && u.barcode.toLowerCase() === parsed.query.toLowerCase()
+        // 1. Exact barcode match
+        for (const p of products) {
+            const u = p.uoms?.find(
+                (uom) => uom.barcode && uom.barcode.trim().toLowerCase() === query.toLowerCase()
             );
-            addProductToOrder(exactBarcodeMatch, parsed.qty, matchedUom?.id);
-            setPunchQuery('');
-            return;
+            if (u) {
+                addProductToOrder(p, u, effectiveQty);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
         }
 
-        const exactSkuMatch = products.find(
-            (p) => p.sku.toLowerCase() === parsed.query.toLowerCase()
+        // 2. Exact SKU match
+        const exactSku = products.find(
+            (p) => p.sku.trim().toLowerCase() === query.toLowerCase()
         );
-
-        if (exactSkuMatch) {
-            addProductToOrder(exactSkuMatch, parsed.qty);
-            setPunchQuery('');
+        if (exactSku) {
+            if (effectiveUomHint) {
+                addProductToOrder(exactSku, undefined, effectiveQty, effectiveUomHint);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+            const chosenCatalogUom = catalogSelectedUoms[exactSku.id]
+                ? exactSku.uoms?.find((u) => u.id === catalogSelectedUoms[exactSku.id])
+                : undefined;
+            if (chosenCatalogUom) {
+                addProductToOrder(exactSku, chosenCatalogUom, effectiveQty);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+            if (exactSku.uoms && exactSku.uoms.length > 1) {
+                setUomPromptProduct({ product: exactSku, qty: effectiveQty });
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+            addProductToOrder(exactSku, undefined, effectiveQty);
+            setPendingMultiplier(1);
+            setPendingUomHint(undefined);
+            setScannerInput('');
             return;
         }
 
-        const partialMatches = products.filter(
-            (p) =>
-                p.sku.toLowerCase().includes(parsed.query.toLowerCase()) ||
-                p.name.toLowerCase().includes(parsed.query.toLowerCase())
-        );
+        // 3. Search filtered matches
+        if (catalogFilteredProducts.length > 0) {
+            const target =
+                catalogActiveIndex >= 0 && catalogActiveIndex < catalogFilteredProducts.length
+                    ? catalogFilteredProducts[catalogActiveIndex]
+                    : catalogFilteredProducts[0];
 
-        if (partialMatches.length === 1) {
-            addProductToOrder(partialMatches[0], parsed.qty);
-            setPunchQuery('');
-            return;
-        }
+            if (effectiveUomHint) {
+                addProductToOrder(target, undefined, effectiveQty, effectiveUomHint);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
 
-        if (partialMatches.length > 1) {
-            setCatalogSearch(parsed.query);
-            setActiveRowIndex(0);
-            setPunchMessage({
-                text: `Found ${partialMatches.length} matching products. Use Up/Down arrows and Enter to punch.`,
-                type: 'warning',
+            const chosenCatalogUom = catalogSelectedUoms[target.id]
+                ? target.uoms?.find((u) => u.id === catalogSelectedUoms[target.id])
+                : undefined;
+
+            if (chosenCatalogUom) {
+                addProductToOrder(target, chosenCatalogUom, effectiveQty);
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+
+            if (target.uoms && target.uoms.length > 1) {
+                setUomPromptProduct({ product: target, qty: effectiveQty });
+                setPendingMultiplier(1);
+                setPendingUomHint(undefined);
+                setScannerInput('');
+                return;
+            }
+
+            addProductToOrder(target, undefined, effectiveQty);
+            setPendingMultiplier(1);
+            setPendingUomHint(undefined);
+            setScannerInput('');
+        } else {
+            setScannerFeedback({
+                type: 'error',
+                message: `No product or barcode matching "${query}"`,
             });
-            return;
+            setTimeout(() => setScannerFeedback(null), 3500);
         }
-
-        setPunchMessage({
-            text: `No matching product or barcode found for "${parsed.query}".`,
-            type: 'error',
-        });
     };
 
-    // Keyboard navigation in punch input
-    const handlePunchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setActiveRowIndex((prev) => Math.min(filteredProducts.length - 1, prev + 1));
-            scrollActiveRowIntoView(activeRowIndex + 1);
+            setCatalogActiveIndex((prev) => {
+                const next = prev < catalogFilteredProducts.length - 1 ? prev + 1 : 0;
+                scrollActiveRowIntoView(next);
+                return next;
+            });
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            setActiveRowIndex((prev) => Math.max(0, prev - 1));
-            scrollActiveRowIntoView(activeRowIndex - 1);
+            setCatalogActiveIndex((prev) => {
+                const next = prev > 0 ? prev - 1 : catalogFilteredProducts.length - 1;
+                scrollActiveRowIntoView(next);
+                return next;
+            });
         } else if (e.key === 'Enter') {
             e.preventDefault();
-            handlePunchSubmit();
+            handleScannerSubmit();
         } else if (e.key === 'Escape') {
-            setPunchQuery('');
-            setCatalogSearch('');
-            setStickyMultiplier(null);
-            setPunchMessage(null);
+            setScannerInput('');
+            setCatalogActiveIndex(-1);
+            setPendingMultiplier(1);
+            setPendingUomHint(undefined);
+            setScannerFeedback(null);
         }
     };
+
+    const handleCatalogRowClick = (product: Product, specificUom?: ProductUom) => {
+        const parsed = parsePunchQuery(scannerInput);
+        const effectiveQty = parsed.qty * (pendingMultiplier > 1 ? pendingMultiplier : 1);
+        const effectiveUomHint = parsed.uomHint || pendingUomHint;
+        addProductToOrder(product, specificUom, effectiveQty, effectiveUomHint);
+        setPendingMultiplier(1);
+        setPendingUomHint(undefined);
+        setScannerInput('');
+    };
+
+    // Hardware Barcode Scanner Keystroke Buffer (window listener)
+    useEffect(() => {
+        let buffer = '';
+        let lastKeyTime = 0;
+
+        const handleWindowKeyDown = (e: KeyboardEvent) => {
+            const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+            const activeType = (document.activeElement as HTMLInputElement)?.type || '';
+            const isEditingAnotherField =
+                document.activeElement !== scannerInputRef.current &&
+                (activeTag === 'textarea' || (activeTag === 'input' && activeType !== 'button' && activeType !== 'submit'));
+
+            const now = Date.now();
+            const timeDiff = now - lastKeyTime;
+            lastKeyTime = now;
+
+            // Barcode scanners type very rapidly (inter-keystroke interval < 50ms)
+            if (e.key === 'Enter') {
+                if (buffer.length >= 3 && timeDiff < 100) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const scannedBarcode = buffer.trim();
+                    buffer = '';
+
+                    // 1. Lookup scanned barcode directly
+                    for (const p of products) {
+                        const u = p.uoms?.find(
+                            (uom) => uom.barcode && uom.barcode.trim().toLowerCase() === scannedBarcode.toLowerCase()
+                        );
+                        if (u) {
+                            addProductToOrder(p, u, pendingMultiplier, pendingUomHint);
+                            setPendingMultiplier(1);
+                            setPendingUomHint(undefined);
+                            return;
+                        }
+                    }
+
+                    // 2. Check exact SKU
+                    const exactSku = products.find(
+                        (p) => p.sku.trim().toLowerCase() === scannedBarcode.toLowerCase()
+                    );
+                    if (exactSku) {
+                        addProductToOrder(exactSku, undefined, pendingMultiplier, pendingUomHint);
+                        setPendingMultiplier(1);
+                        setPendingUomHint(undefined);
+                        return;
+                    }
+
+                    setScannerFeedback({
+                        type: 'error',
+                        message: `Hardware Scanner: No product found for barcode "${scannedBarcode}"`,
+                    });
+                    setTimeout(() => setScannerFeedback(null), 3500);
+                    return;
+                }
+                buffer = '';
+                return;
+            }
+
+            if (!isEditingAnotherField && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                if (timeDiff > 70) {
+                    buffer = e.key;
+                } else {
+                    buffer += e.key;
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleWindowKeyDown, true);
+        return () => window.removeEventListener('keydown', handleWindowKeyDown, true);
+    }, [products, pendingMultiplier, orderLocationId]);
 
     const scrollActiveRowIntoView = (index: number) => {
         if (!catalogTableContainerRef.current) return;
@@ -495,7 +528,7 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
 
     const updateLine = (
         index: number,
-        fieldOrUpdates: keyof NewPoLineItem | Partial<NewPoLineItem>,
+        fieldOrUpdates: keyof PoLineItem | Partial<PoLineItem>,
         val?: unknown
     ) => {
         setLines((prev) => {
@@ -503,25 +536,50 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
             const current = next[index];
             if (!current) return prev;
 
-            const partial: Partial<NewPoLineItem> =
+            const partial: Partial<PoLineItem> =
                 typeof fieldOrUpdates === 'string'
                     ? { [fieldOrUpdates]: val }
                     : fieldOrUpdates;
 
-            const updated = { ...current, ...partial };
-
             if ('product_uom_id' in partial && partial.product_uom_id !== undefined) {
-                const prod = products.find((p) => p.id === updated.product_id);
-                const uom = prod?.uoms?.find((u) => u.id === Number(partial.product_uom_id));
-                if (uom) {
-                    updated.conversion_factor = uom.conversion_factor;
-                    if (uom.price_cents) {
-                        updated.unit_cost = (uom.price_cents / 100).toFixed(2);
-                    }
+                const targetUomId = Number(partial.product_uom_id);
+                // Check if another line in this order already has this product with the newly selected UOM
+                const existingSameUomIdx = prev.findIndex(
+                    (l, i) => i !== index && l.product_id === current.product_id && l.product_uom_id === targetUomId
+                );
+
+                if (existingSameUomIdx !== -1) {
+                    const existingLine = next[existingSameUomIdx];
+                    const mergedQty = existingLine.ordered_qty + current.ordered_qty;
+                    next[existingSameUomIdx] = {
+                        ...existingLine,
+                        ordered_qty: mergedQty,
+                    };
+                    next.splice(index, 1);
+
+                    const prod = productsById.get(current.product_id);
+                    const uom = prod?.uoms?.find((u) => u.id === targetUomId);
+                    setScannerFeedback({
+                        type: 'success',
+                        message: `Merged into existing ${current.product_name} (${uom?.name || 'Unit'}) line (total: ${mergedQty} pkgs)`,
+                    });
+                    setTimeout(() => setScannerFeedback(null), 3500);
+                    return next;
                 }
+
+                const prod = productsById.get(current.product_id);
+                const uom = prod?.uoms?.find((u) => u.id === targetUomId);
+                const updated = { ...current, ...partial };
+                if (uom && prod) {
+                    updated.product_uom_id = targetUomId;
+                    updated.conversion_factor = uom.conversion_factor;
+                    updated.unit_cost = computeUomPrice(prod, uom);
+                }
+                next[index] = updated;
+                return next;
             }
 
-            next[index] = updated;
+            next[index] = { ...current, ...partial };
             return next;
         });
     };
@@ -645,7 +703,7 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
             lines: payloadLines,
         };
 
-        router.put(`/procurement/orders/${order.id}`, payload, {
+        router.put(update.url(order.id), payload, {
             onFinish: () => setIsSubmitting(false),
         });
     };
@@ -682,7 +740,7 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
                                 Status: {order.status}
                             </span>
                             <Link
-                                href="/procurement/orders"
+                                href={index.url()}
                                 className="inline-flex h-8 items-center px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 transition-colors"
                             >
                                 Cancel
@@ -788,138 +846,190 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
 
                 {/* MAIN 2-COLUMN WORKSPACE: LEFT CATALOG + PUNCH (42%), RIGHT ACTIVE ORDER REVIEW (58%) */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                    {/* LEFT COLUMN: PRODUCT SOURCING & FAST PUNCH CONSOLE (5 COLS / ~42%) */}
-                    <div className="lg:col-span-5 flex flex-col gap-3">
-                        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs overflow-hidden flex flex-col">
-                            {/* Catalog Header & Category Pills */}
-                            <div className="p-3 border-b border-slate-100 dark:border-slate-800 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                                            Product Catalog
-                                        </span>
-                                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                            {filteredProducts.length} items
-                                        </span>
-                                    </div>
-                                    <div className="relative w-44">
-                                        <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                                        <input
-                                            type="text"
-                                            value={catalogSearch}
-                                            onChange={(e) => {
-                                                setCatalogSearch(e.target.value);
-                                                setActiveRowIndex(0);
-                                            }}
-                                            placeholder="Filter catalog..."
-                                            className="h-7 w-full rounded-md border border-slate-200 bg-slate-50 pl-8 pr-2.5 text-xs text-slate-900 focus:border-brand focus:bg-white focus:outline-hidden dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100"
-                                        />
-                                    </div>
+                    {/* LEFT COLUMN: PRODUCT CATALOG & SCANNER CONSOLE (~40-42% / col-span-5) */}
+                    <div className="lg:col-span-5 flex flex-col space-y-3">
+                        {/* Catalog Header & Category Filter Tabs */}
+                        <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                                        Product Catalog
+                                    </span>
+                                    <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        {catalogFilteredProducts.length} items
+                                    </span>
                                 </div>
+                                <span className="text-[11px] text-slate-400">
+                                    Click row to punch
+                                </span>
+                            </div>
 
-                                {/* Category Pills */}
-                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                                    {categories.map((cat) => (
+                            {/* Category Filter Pills */}
+                            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                                {availableCategories.map((cat) => {
+                                    const isSelected = selectedCategory === cat;
+                                    return (
                                         <button
                                             key={cat}
                                             type="button"
                                             onClick={() => {
                                                 setSelectedCategory(cat);
-                                                setActiveRowIndex(0);
+                                                setCatalogActiveIndex(-1);
                                             }}
-                                            className={`h-6 px-2.5 rounded-full text-[11px] font-medium shrink-0 transition-colors ${
-                                                selectedCategory === cat
-                                                    ? 'bg-brand text-white shadow-2xs'
-                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                            className={`px-3 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                                                isSelected
+                                                    ? 'bg-brand text-white shadow-2xs font-semibold'
+                                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700'
                                             }`}
                                         >
                                             {cat}
                                         </button>
-                                    ))}
-                                </div>
+                                    );
+                                })}
                             </div>
 
-                            {/* Catalog Table with Click-to-Punch & Arrow Selection */}
+                            {/* Catalog Table Container */}
                             <div
                                 ref={catalogTableContainerRef}
-                                className="overflow-y-auto max-h-[calc(100vh-420px)] min-h-[300px] divide-y divide-slate-100 dark:divide-slate-800/80"
+                                className="h-[calc(100vh-420px)] min-h-[420px] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 shadow-2xs"
                             >
-                                <table className="w-full text-left text-xs">
-                                    <thead className="sticky top-0 z-10 bg-slate-50/95 dark:bg-slate-950/95 backdrop-blur-xs text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+                                <table className="w-full text-left text-xs border-collapse">
+                                    <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 uppercase sticky top-0 z-10">
                                         <tr>
-                                            <th className="px-3 py-2">SKU / Code</th>
-                                            <th className="px-3 py-2">Product Description</th>
-                                            <th className="px-3 py-2">Default UOM</th>
-                                            <th className="px-2 py-2 text-center">SOH</th>
-                                            <th className="px-3 py-2 text-right">Unit Cost</th>
-                                            <th className="px-2 py-2 text-center">Action</th>
+                                            <th className="px-3 py-2 w-24">SKU / Code</th>
+                                            <th className="px-3 py-2 min-w-[140px]">Product Description</th>
+                                            <th className="px-3 py-2 w-24">Packaging</th>
+                                            <th className="px-3 py-2 w-16 text-center">SOH</th>
+                                            <th className="px-3 py-2 w-20 text-right">Cost</th>
+                                            <th className="px-3 py-2 w-16 text-center">Action</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
-                                        {filteredProducts.length === 0 ? (
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                        {catalogFilteredProducts.length === 0 ? (
                                             <tr>
-                                                <td colSpan={6} className="px-4 py-8 text-center text-slate-400 text-xs">
-                                                    No products match your filter.
+                                                <td colSpan={6} className="px-4 py-16 text-center">
+                                                    <div className="flex flex-col items-center justify-center space-y-1.5 text-slate-400">
+                                                        <PackageIcon className="h-8 w-8 text-slate-300 dark:text-slate-700" />
+                                                        <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                                                            No products match your query
+                                                        </p>
+                                                        <p className="text-[11px] text-slate-400">
+                                                            Try selecting "ALL" or adjusting your search punch query.
+                                                        </p>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ) : (
-                                            filteredProducts.map((prod, idx) => {
-                                                const isRowSelected = idx === activeRowIndex;
-                                                const baseUom = prod.uoms?.find((u) => u.is_base_unit) || prod.uoms?.[0];
-                                                const soh = prod.balances?.reduce((sum, b) => sum + (b.current_qty || 0), 0) || 0;
-                                                const cost = baseUom?.price_cents ? (baseUom.price_cents / 100).toFixed(2) : '0.00';
+                                            catalogFilteredProducts.map((p, idx) => {
+                                                const soh = getProductSoh(p, orderLocationId);
+                                                const defaultUom = findMatchingUom(p);
+                                                const selectedUomId = catalogSelectedUoms[p.id];
+                                                const activeUom = (selectedUomId ? p.uoms?.find((u) => u.id === selectedUomId) : undefined) || defaultUom;
+                                                const unitCost = computeUomPrice(p, activeUom);
+                                                const isHighlighted = idx === catalogActiveIndex;
 
                                                 return (
                                                     <tr
-                                                        key={prod.id}
+                                                        key={p.id}
                                                         data-index={idx}
-                                                        onClick={() => {
-                                                            setActiveRowIndex(idx);
-                                                            addProductToOrder(prod, stickyMultiplier ?? 1);
-                                                        }}
+                                                        onClick={() => handleCatalogRowClick(p, activeUom)}
                                                         className={`cursor-pointer transition-colors ${
-                                                            isRowSelected
-                                                                ? 'bg-brand/5 dark:bg-brand/10 ring-1 ring-inset ring-brand/30'
-                                                                : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                                                            isHighlighted
+                                                                ? 'bg-brand/10 dark:bg-brand/20 ring-1 ring-inset ring-brand'
+                                                                : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
                                                         }`}
                                                     >
-                                                        <td className="px-3 py-2 font-mono text-[11px] text-slate-800 dark:text-slate-200 font-semibold whitespace-nowrap">
-                                                            <div>{prod.sku}</div>
-                                                            {baseUom?.barcode && (
-                                                                <div className="text-[10px] text-slate-400 font-normal">
-                                                                    {baseUom.barcode}
+                                                        {/* SKU & Barcode */}
+                                                        <td className="px-3 py-2 align-middle">
+                                                            <div className="flex flex-col">
+                                                                <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 w-fit">
+                                                                    {p.sku}
+                                                                </span>
+                                                                {defaultUom?.barcode && (
+                                                                    <span className="font-mono text-[10px] text-slate-400 mt-0.5 truncate max-w-[90px]">
+                                                                        {defaultUom.barcode}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Product Name & Category */}
+                                                        <td className="px-3 py-2 align-middle">
+                                                            <div className="font-medium text-xs text-slate-900 dark:text-slate-100 truncate max-w-[170px]">
+                                                                {p.name}
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-400">
+                                                                {p.category || 'General'}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Packaging UOM with Interactive Selector */}
+                                                        <td className="px-3 py-2 align-middle">
+                                                            {p.uoms && p.uoms.length > 1 ? (
+                                                                <div className="flex flex-col gap-0.5">
+                                                                    <select
+                                                                        value={activeUom?.id}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        onChange={(e) => {
+                                                                            e.stopPropagation();
+                                                                            const newId = Number(e.target.value);
+                                                                            setCatalogSelectedUoms((prev) => ({ ...prev, [p.id]: newId }));
+                                                                        }}
+                                                                        className="h-7 w-fit min-w-[100px] max-w-[130px] rounded border border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-800 shadow-2xs focus:border-brand focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 cursor-pointer"
+                                                                        title="Choose packaging unit to punch"
+                                                                    >
+                                                                        {p.uoms.map((u) => (
+                                                                            <option key={u.id} value={u.id}>
+                                                                                {u.name} (x{u.conversion_factor})
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                    <span className="text-[10px] text-slate-400">
+                                                                        {p.uoms.length} pkgs available
+                                                                    </span>
                                                                 </div>
+                                                            ) : activeUom ? (
+                                                                <div className="font-mono text-[11px] text-slate-700 dark:text-slate-300">
+                                                                    {activeUom.name}{' '}
+                                                                    <span className="text-slate-400">
+                                                                        (x{activeUom.conversion_factor})
+                                                                    </span>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-slate-400 text-xs">None</span>
                                                             )}
                                                         </td>
-                                                        <td className="px-3 py-2">
-                                                            <div className="font-medium text-slate-900 dark:text-slate-100 line-clamp-1">
-                                                                {prod.name}
-                                                            </div>
-                                                            <div className="text-[10px] text-slate-400 line-clamp-1">
-                                                                {prod.category || 'General'}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-3 py-2 text-slate-600 dark:text-slate-400 whitespace-nowrap text-[11px]">
-                                                            {baseUom?.name} {baseUom && baseUom.conversion_factor > 1 ? `(x${baseUom.conversion_factor})` : '(x1)'}
-                                                        </td>
-                                                        <td className="px-2 py-2 text-center">
-                                                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+
+                                                        {/* Stock on Hand (SOH) */}
+                                                        <td className="px-3 py-2 align-middle text-center">
+                                                            <span
+                                                                className={`font-mono text-xs px-2 py-0.5 rounded-full font-semibold border ${
+                                                                    soh > 0
+                                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:border-emerald-800'
+                                                                        : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800'
+                                                                }`}
+                                                            >
                                                                 {soh}
                                                             </span>
                                                         </td>
-                                                        <td className="px-3 py-2 text-right font-mono font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap">
-                                                            ₱{cost}
+
+                                                        {/* Unit Cost */}
+                                                        <td className="px-3 py-2 align-middle text-right font-mono text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                                            ₱{unitCost}
                                                         </td>
-                                                        <td className="px-2 py-2 text-center">
+
+                                                        {/* Action / Add button */}
+                                                        <td className="px-3 py-2 align-middle text-center">
                                                             <button
                                                                 type="button"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    addProductToOrder(prod, stickyMultiplier ?? 1);
+                                                                    handleCatalogRowClick(p, activeUom);
                                                                 }}
-                                                                className="h-6 px-2 rounded bg-slate-100 hover:bg-brand hover:text-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-medium transition-colors"
+                                                                className="inline-flex h-7 items-center gap-1 rounded-md bg-brand/10 hover:bg-brand px-2 text-[11px] font-medium text-brand hover:text-white transition-colors"
                                                             >
-                                                                + Add
+                                                                <PlusIcon className="h-3 w-3" />
+                                                                <span>{pendingMultiplier > 1 || pendingUomHint ? `x${pendingMultiplier}${pendingUomHint ? ` ${pendingUomHint}` : ''}` : 'Add'}</span>
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -931,85 +1041,121 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
                             </div>
                         </div>
 
-                        {/* HIGH-SPEED PUNCH & SCANNER CONSOLE */}
-                        <div className="bg-slate-900 text-white rounded-xl p-3 shadow-lg border border-slate-800 flex flex-col gap-2">
-                            <div className="flex items-center justify-between text-[11px]">
-                                <div className="flex items-center gap-1.5 font-semibold tracking-wide text-slate-300 uppercase">
-                                    <BarcodeIcon className="h-3.5 w-3.5 text-emerald-400" />
-                                    <span>Punch & Scanner Console</span>
-                                </div>
+                        {/* BOTTOM COMMAND CONSOLE & PUNCH BAR */}
+                        <div className="bg-slate-900 text-white p-3.5 rounded-xl border border-slate-800 shadow-md space-y-2">
+                            <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
-                                    {stickyMultiplier !== null && (
-                                        <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-mono font-bold text-[10px]">
-                                            Multiplier: *{stickyMultiplier}
+                                    <BarcodeIcon className="h-4 w-4 text-brand" />
+                                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-200">
+                                        Punch & Scanner Console
+                                    </span>
+                                    {(pendingMultiplier > 1 || pendingUomHint) && (
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold">
+                                            <span>Multiplier: x{pendingMultiplier}{pendingUomHint ? ` (${pendingUomHint})` : ''}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setPendingMultiplier(1);
+                                                    setPendingUomHint(undefined);
+                                                }}
+                                                className="p-0.5 hover:text-white"
+                                                title="Reset multiplier to 1"
+                                            >
+                                                <XIcon className="h-3 w-3" />
+                                            </button>
                                         </span>
                                     )}
-                                    <span className="text-[10px] text-slate-400">
-                                        Ready for Multipliers (*3 / 3*SKU)
-                                    </span>
+                                </div>
+                                <span className="text-xs text-slate-400 hidden sm:inline-flex items-center gap-1.5">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    Scanner Active • Enter or Click to Add
+                                </span>
+                            </div>
+
+                            {/* Punch Input */}
+                            <div className="relative flex items-center">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                    <BarcodeIcon className="h-4 w-4" />
+                                </div>
+                                <input
+                                    ref={scannerInputRef}
+                                    type="text"
+                                    value={scannerInput}
+                                    onChange={(e) => {
+                                        setScannerInput(e.target.value);
+                                        setCatalogActiveIndex(-1);
+                                    }}
+                                    onKeyDown={handleScannerKeyDown}
+                                    placeholder="Scan barcode, punch SKU, or set quantity (e.g. 5bx*SKU, 5pc*SKU, 3*SKU, *3, or filter)..."
+                                    className="h-10 w-full rounded-lg border border-slate-700 bg-slate-950 pl-10 pr-24 text-xs text-white placeholder-slate-400 focus:border-brand focus:outline-hidden focus:ring-2 focus:ring-brand/30"
+                                    autoComplete="off"
+                                />
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                                    {scannerInput && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setScannerInput('');
+                                                setCatalogActiveIndex(-1);
+                                                scannerInputRef.current?.focus();
+                                            }}
+                                            className="p-1 rounded text-slate-400 hover:text-white"
+                                        >
+                                            <XIcon className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleScannerSubmit()}
+                                        className="h-7 px-3 rounded bg-brand text-xs font-semibold text-white hover:bg-brand/90 transition-colors shadow-2xs"
+                                    >
+                                        ↵ Punch
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="relative flex items-center gap-1.5">
-                                <div className="relative flex-1">
-                                    <input
-                                        ref={punchInputRef}
-                                        type="text"
-                                        value={punchQuery}
-                                        onChange={(e) => setPunchQuery(e.target.value)}
-                                        onKeyDown={handlePunchKeyDown}
-                                        placeholder="Scan barcode, punch SKU, or set quantity (e.g. 3*SKU, *3, or filter)..."
-                                        className="h-10 w-full rounded-lg border border-slate-700 bg-slate-950 pl-9 pr-3 text-xs text-white placeholder-slate-500 focus:border-brand focus:outline-hidden focus:ring-1 focus:ring-brand font-mono"
-                                    />
-                                    <BarcodeIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handlePunchSubmit()}
-                                    className="h-10 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition-colors shrink-0 shadow-xs"
-                                >
-                                    Punch
-                                </button>
-                            </div>
-
-                            {/* Punch feedback alert toast */}
-                            {punchMessage && (
+                            {/* Scanner Status / Feedback */}
+                            {scannerFeedback && (
                                 <div
-                                    className={`px-2.5 py-1.5 rounded text-[11px] font-medium flex items-center gap-2 ${
-                                        punchMessage.type === 'success'
-                                            ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
-                                            : punchMessage.type === 'warning'
-                                              ? 'bg-amber-950/80 text-amber-300 border border-amber-800'
-                                              : 'bg-rose-950/80 text-rose-300 border border-rose-800'
+                                    className={`text-xs flex items-center gap-1.5 pt-0.5 ${
+                                        scannerFeedback.type === 'success'
+                                            ? 'text-emerald-400'
+                                            : scannerFeedback.type === 'warning'
+                                              ? 'text-amber-400'
+                                              : 'text-rose-400'
                                     }`}
                                 >
-                                    {punchMessage.type === 'success' ? (
-                                        <CheckCircleIcon className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                                    {scannerFeedback.type === 'success' ? (
+                                        <CheckCircleIcon className="h-3.5 w-3.5 shrink-0" />
                                     ) : (
-                                        <AlertTriangleIcon className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                        <AlertTriangleIcon className="h-3.5 w-3.5 shrink-0" />
                                     )}
-                                    <span>{punchMessage.text}</span>
+                                    <span>{scannerFeedback.message}</span>
                                 </div>
                             )}
 
-                            {/* Shortcut Legend */}
-                            <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-400 pt-0.5 border-t border-slate-800/80">
-                                <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
-                                    *3 or 3*
-                                </span>
-                                <span>Set multiplier</span>
-                                <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
-                                    3*SKU
-                                </span>
-                                <span>Punch with quantity</span>
-                                <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
-                                    Up/Down
-                                </span>
-                                <span>Browse table</span>
-                                <span className="font-mono bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
-                                    Enter
-                                </span>
-                                <span>Punch</span>
+                            {/* Shortcut Cheat Sheet Legend */}
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400 pt-1 border-t border-slate-800">
+                                <div className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">*3</kbd>
+                                    <span>or</span>
+                                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">3*</kbd>
+                                    <span>Set multiplier</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">5bx*SKU</kbd>
+                                    <span>or</span>
+                                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">3*SKU</kbd>
+                                    <span>Punch with UOM</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">↑/↓</kbd>
+                                    <span>Select table</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <kbd className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700">↵ Enter</kbd>
+                                    <span>Punch</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1096,12 +1242,36 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
                                                                 <span>•</span>
                                                                 <span>SOH:{line.stock_on_hand}</span>
                                                             </div>
+                                                            {(() => {
+                                                                const unused = uoms.filter(
+                                                                    (u) => !lines.some((l) => l.product_id === line.product_id && l.product_uom_id === u.id)
+                                                                );
+                                                                if (unused.length === 0) return null;
+                                                                return (
+                                                                    <div className="mt-1 flex items-center gap-1 flex-wrap">
+                                                                        <span className="text-[10px] text-slate-400">Also add:</span>
+                                                                        {unused.map((extraUom) => (
+                                                                            <button
+                                                                                key={extraUom.id}
+                                                                                type="button"
+                                                                                onClick={() => prod && addProductToOrder(prod, extraUom, 1)}
+                                                                                className="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[10px] font-medium bg-brand/10 text-brand hover:bg-brand hover:text-white transition-colors"
+                                                                                title={`Add ${extraUom.name} (x${extraUom.conversion_factor}) line to order`}
+                                                                            >
+                                                                                <PlusIcon className="h-2.5 w-2.5" />
+                                                                                <span>{extraUom.name}</span>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                );
+                                                            })()}
                                                         </td>
-                                                        <td className="px-2 py-2">
+                                                        <td className="px-2 py-2 align-middle">
                                                             <select
                                                                 value={line.product_uom_id}
                                                                 onChange={(e) => updateLine(idx, 'product_uom_id', Number(e.target.value))}
-                                                                className="h-7 rounded border border-slate-200 bg-white px-1.5 text-xs text-slate-800 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200"
+                                                                className="h-8 w-full min-w-[100px] max-w-[130px] rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-800 shadow-2xs focus:border-brand focus:outline-hidden dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 cursor-pointer"
+                                                                title="Select packaging unit"
                                                             >
                                                                 {uoms.map((u) => (
                                                                     <option key={u.id} value={u.id}>
@@ -1391,7 +1561,7 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
                             </div>
                             <div className="flex items-center justify-end gap-2 shrink-0">
                                 <Link
-                                    href="/procurement/orders"
+                                    href={index.url()}
                                     className="h-9 px-4 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 flex items-center"
                                 >
                                     Cancel
@@ -1408,6 +1578,17 @@ export default function EditPurchaseOrderPage({ order, suppliers, locations, pro
                     </div>
                 </div>
             </form>
+
+            {/* Packaging Unit Selection Modal for Multiple UOMs */}
+            <UomSelectionModal
+                prompt={uomPromptProduct}
+                lines={lines}
+                onSelect={(product, uom, qty) => {
+                    addProductToOrder(product, uom, qty);
+                    setUomPromptProduct(null);
+                }}
+                onClose={() => setUomPromptProduct(null)}
+            />
         </AppLayout>
     );
 }

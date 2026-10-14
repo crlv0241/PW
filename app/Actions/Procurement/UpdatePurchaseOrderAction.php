@@ -54,6 +54,12 @@ final class UpdatePurchaseOrderAction
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if (in_array($lockedPo->status, ['COMPLETED', 'CANCELLED'], true)) {
+                throw ValidationException::withMessages([
+                    'order' => [sprintf('Cannot adjust Purchase Order %s because it is already %s.', $lockedPo->po_number, $lockedPo->status)],
+                ]);
+            }
+
             // Check if any lines have already been received
             $hasReceipts = $lockedPo->lines()->where('received_base_qty', '>', 0)->exists();
 
@@ -61,14 +67,23 @@ final class UpdatePurchaseOrderAction
             $discountCents = 0;
             $totalCents = 0;
 
+            // Pre-fetch all referenced ProductUoms in one single query to eliminate N+1 queries
+            $uomIds = array_unique(array_map(fn (array $l) => (int) $l['product_uom_id'], $data['lines']));
+            $uoms = ProductUom::query()
+                ->whereIn('id', $uomIds)
+                ->get()
+                ->keyBy('id');
+
             /** @var list<array<string, mixed>> $computedLines */
             $computedLines = [];
 
             foreach ($data['lines'] as $lineInput) {
-                $uom = ProductUom::query()
-                    ->where('id', $lineInput['product_uom_id'])
-                    ->where('product_id', $lineInput['product_id'])
-                    ->firstOrFail();
+                $uom = $uoms->get($lineInput['product_uom_id']);
+                if ($uom === null || $uom->product_id !== (int) $lineInput['product_id']) {
+                    throw ValidationException::withMessages([
+                        'lines' => [sprintf('Product UOM ID %d does not match Product ID %d.', $lineInput['product_uom_id'], $lineInput['product_id'])],
+                    ]);
+                }
 
                 $conversionFactor = max(1, $uom->conversion_factor);
                 $orderedQty = max(1, $lineInput['ordered_qty']);
