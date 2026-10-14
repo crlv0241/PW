@@ -149,9 +149,12 @@ This document operationalizes [initial plan.md](file:///Users/macuser/Desktop/PO
 - **Module 7.3: Connectivity Watchdog & Auto-Push**
   - Background network monitor automatically triggering `POST /api/v1/sync/up` when internet connectivity restores.
   - Header sync pill showing offline/syncing/synced status with pending queue count.
-- **Module 7.4: ESC/POS Thermal Receipt Printing**
-  - Raw TCP/Bluetooth socket integration with 58mm / 80mm mobile thermal printers.
-  - Fixed-width monospace receipt templates for sales invoices and payment collection slips.
+- **Module 7.4: Configurable Hardware Printer & Device Engine**
+  - Driver-Agnostic Printer Adapter Architecture: Decoupled interface supporting multiple hardware devices without vendor lock-in.
+  - Multi-Protocol Connection Profiles: Configurable via settings for TCP/IP network socket, Bluetooth RFCOMM, USB OTG, and Serial COM.
+  - Multi-Dialect Command Drivers: Driver strategies for standard ESC/POS, TSPL (label printing), StarPRNT, and raw CPCL dialects.
+  - Configurable Paper & Column Profiles: Dynamic width adaptors for 58mm (32 columns), 80mm (42/48 columns), and custom print density.
+  - Dynamic Monospace Receipt Builder: Configurable receipt and collection slip templates with customized headers, tax registration disclaimers, and barcodes.
 
 ---
 
