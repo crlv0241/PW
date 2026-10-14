@@ -25,4 +25,7 @@
      - Will it negatively impact component rendering performance?
      - Does it tightly couple components that might evolve independently?
    - If the abstraction adds unnecessary complexity, prefer slight duplication over a bad abstraction.
+3. **Manual Testing Preferred (No Automated Browser Subagents)**:
+   - Do NOT run automated browser subagents or automated browser sessions. The user prefers to test web flows and UI interactions manually.
+   - Always verify code via CLI checks (`npm run types:check`, `npm run build`, `vendor/bin/pest`, `vendor/bin/phpstan analyse`), confirm the local server is running, and provide clear step-by-step instructions, routes, credentials, and test flows for the user.
 

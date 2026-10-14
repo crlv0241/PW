@@ -6,6 +6,8 @@ use App\Http\Controllers\Admin\SystemSettingController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\InventoryController;
+use App\Http\Controllers\Procurement\GoodsReceiptController;
+use App\Http\Controllers\Procurement\PurchaseOrderController;
 use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -33,6 +35,17 @@ Route::middleware('auth')->group(function () {
         Route::get('/ledger', [InventoryController::class, 'ledger'])->name('ledger');
         Route::post('/transfer', [InventoryController::class, 'transfer'])->name('transfer');
         Route::post('/adjust', [InventoryController::class, 'adjust'])->name('adjust');
+    });
+
+    // Procurement & Inbound Receiving (WMS)
+    Route::prefix('procurement')->name('procurement.')->group(function () {
+        Route::get('/orders', [PurchaseOrderController::class, 'index'])->name('orders.index');
+        Route::post('/orders', [PurchaseOrderController::class, 'store'])->name('orders.store');
+        Route::get('/orders/{order}', [PurchaseOrderController::class, 'show'])->name('orders.show');
+
+        Route::get('/receiving', [GoodsReceiptController::class, 'index'])->name('receiving.index');
+        Route::post('/receiving', [GoodsReceiptController::class, 'store'])->name('receiving.store');
+        Route::get('/receiving/{receipt}/reconcile', [GoodsReceiptController::class, 'reconcile'])->name('receiving.reconcile');
     });
 
     // Super Admin Web Console

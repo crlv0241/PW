@@ -13,6 +13,8 @@ import {
     MenuIcon,
     PanelLeftCloseIcon,
     PanelLeftOpenIcon,
+    FileTextIcon,
+    TruckIcon,
 } from '../components/ui/icons';
 
 interface AuthUser {
@@ -220,6 +222,24 @@ export function AppLayout({ children, title, eyebrow, description, breadcrumbs, 
                         >
                             <PackageIcon className="h-4 w-4 shrink-0" />
                             {!isCollapsed && <span>Products & UOM</span>}
+                        </Link>
+
+                        <Link
+                            href="/procurement/orders"
+                            title="Purchase Orders"
+                            className={navItemClasses(isCurrent('/procurement/orders'))}
+                        >
+                            <FileTextIcon className="h-4 w-4 shrink-0" />
+                            {!isCollapsed && <span>Purchase Orders</span>}
+                        </Link>
+
+                        <Link
+                            href="/procurement/receiving"
+                            title="Goods Receiving (Blind Intake)"
+                            className={navItemClasses(isCurrent('/procurement/receiving'))}
+                        >
+                            <TruckIcon className="h-4 w-4 shrink-0" />
+                            {!isCollapsed && <span>Goods Receiving</span>}
                         </Link>
 
                         <Link

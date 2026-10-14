@@ -377,8 +377,18 @@ export default function InventoryIndex({ balances, locations, products, filters 
                             <input
                                 type="number"
                                 min="1"
-                                value={transferForm.data.quantity}
-                                onChange={(e) => transferForm.setData('quantity', parseInt(e.target.value) || 1)}
+                                value={transferForm.data.quantity === 0 ? '' : transferForm.data.quantity}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    transferForm.setData('quantity', val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0));
+                                }}
+                                onBlur={() => {
+                                    if (!transferForm.data.quantity || transferForm.data.quantity < 1) {
+                                        transferForm.setData('quantity', 1);
+                                    }
+                                }}
+                                placeholder="1"
                                 className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 font-mono"
                             />
                             {transferForm.errors.quantity && (
@@ -465,8 +475,13 @@ export default function InventoryIndex({ balances, locations, products, filters 
                             <input
                                 type="number"
                                 min="0"
-                                value={adjustForm.data.new_count}
-                                onChange={(e) => adjustForm.setData('new_count', parseInt(e.target.value) || 0)}
+                                value={adjustForm.data.new_count === 0 && !adjustForm.isDirty ? '' : adjustForm.data.new_count}
+                                onFocus={(e) => e.target.select()}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    adjustForm.setData('new_count', val === '' ? 0 : Math.max(0, parseInt(val, 10) || 0));
+                                }}
+                                placeholder="0"
                                 className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 font-mono"
                             />
                             {adjustForm.errors.new_count && (

@@ -58,4 +58,14 @@ final class Product extends Model
     {
         return $this->hasOne(ProductUom::class)->where('is_base_unit', true);
     }
+
+    /**
+     * Get inventory stock balances across warehouse locations.
+     *
+     * @return HasMany<InventoryBalance, $this>
+     */
+    public function balances(): HasMany
+    {
+        return $this->hasMany(InventoryBalance::class);
+    }
 }

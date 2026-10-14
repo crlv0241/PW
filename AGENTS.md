@@ -42,6 +42,7 @@ These negative constraints supersede all other suggestions and must NEVER be vio
 - **NEVER EDIT COMMITTED MIGRATIONS**: Always create a new sequential migration to alter schemas.
 - **NEVER WRITE UNPARAMETERIZED RAW SQL**: Always use Eloquent query builder or parameterized bindings (`DB::raw('...', [$val])`).
 - **NEVER INCLUDE IRRELEVANT MARKETING PHRASES OR JARGON**: Do not display buzzwords, slogans, or technical marketing filler in UI, headers, cards, or badges (e.g. "Enterprise Core v1.0", "ACID Compliant...", "Ledger Synchronized", "NextGen OS"). Use only concise, domain-specific descriptions and icons that describe actions specifically and only when truly needed.
+- **NEVER SPAWN OR RUN AUTOMATED BROWSER SUBAGENTS FOR BROWSER TESTING**: The USER prefers to conduct all manual browser and UI testing personally. NEVER invoke automated browser subagents or open browser sessions automatically. Instead, verify builds statically and via automated tests (`npm run build`, `npm run types:check`, `vendor/bin/pest`, `vendor/bin/phpstan analyse`), ensure dev servers are operational, and provide clear, step-by-step testing instructions, URLs, credentials, and verification flows for the user to test manually.
 
 *Detailed rule files: [`.agents/rules/`](.agents/rules/)*
 

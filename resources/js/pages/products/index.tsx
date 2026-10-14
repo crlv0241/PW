@@ -39,6 +39,7 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
         base_uom_barcode: '',
         base_uom_price_cents: 0,
     });
+    const [priceInput, setPriceInput] = useState<string>('0.00');
 
     useEffect(() => {
         const timeout = setTimeout(() => {
@@ -68,6 +69,7 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
             onSuccess: () => {
                 setIsCreateOpen(false);
                 reset();
+                setPriceInput('0.00');
             },
         });
     };
@@ -438,8 +440,24 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                 <input
                                     type="number"
                                     step="0.01"
-                                    value={(data.base_uom_price_cents / 100).toFixed(2)}
-                                    onChange={(e) => setData('base_uom_price_cents', Math.round(parseFloat(e.target.value || '0') * 100))}
+                                    min="0"
+                                    value={priceInput}
+                                    onFocus={(e) => e.target.select()}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setPriceInput(val);
+                                        const parsed = parseFloat(val);
+                                        setData('base_uom_price_cents', isNaN(parsed) || parsed < 0 ? 0 : Math.round(parsed * 100));
+                                    }}
+                                    onBlur={() => {
+                                        const parsed = parseFloat(priceInput);
+                                        if (isNaN(parsed) || parsed < 0) {
+                                            setPriceInput('0.00');
+                                            setData('base_uom_price_cents', 0);
+                                        } else {
+                                            setPriceInput(parsed.toFixed(2));
+                                        }
+                                    }}
                                     placeholder="0.00"
                                     className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 font-mono"
                                 />
