@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\SystemSetting;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -40,9 +41,21 @@ class HandleInertiaRequests extends Middleware
             $user->loadMissing('roles');
         }
 
+        $settings = SystemSetting::current();
+
         return [
             ...parent::share($request),
-            'name' => config('app.name'),
+            'name' => $settings->company_name,
+            'branding' => [
+                'company_name' => $settings->company_name,
+                'tagline' => $settings->tagline,
+                'logo_url' => $settings->logo_url,
+                'favicon_url' => $settings->favicon_url,
+                'primary_color' => $settings->primary_color,
+                'accent_color' => $settings->accent_color,
+                'theme_palette' => $settings->theme_palette,
+                'dark_mode_default' => (bool) $settings->dark_mode_default,
+            ],
             'auth' => [
                 'user' => $user ? [
                     'id' => $user->id,

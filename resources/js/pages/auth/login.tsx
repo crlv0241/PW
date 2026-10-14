@@ -1,5 +1,5 @@
 import React from 'react';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import {
     LayersIcon,
     MailIcon,
@@ -10,7 +10,21 @@ import {
     XIcon,
 } from '../../components/ui/icons';
 
+interface BrandingProps {
+    company_name?: string;
+    tagline?: string;
+    logo_url?: string | null;
+    primary_color?: string;
+    accent_color?: string;
+}
+
 export default function Login() {
+    const pageProps = usePage().props as { branding?: BrandingProps };
+    const branding = pageProps.branding;
+    const companyName = branding?.company_name || 'APEX POS & WMS';
+    const tagline = branding?.tagline || 'Enterprise Access Control & Terminal Authentication';
+    const primaryColor = branding?.primary_color || '#4f46e5';
+
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -34,22 +48,38 @@ export default function Login() {
 
     return (
         <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-            <Head title="Sign In - APEX POS & WMS" />
+            <Head title={`Sign In - ${companyName}`} />
 
-            {/* Subtle Gradient Glow in Background */}
-            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+            {/* Dynamic Subtle Gradient Glow in Background */}
+            <div
+                style={{ backgroundColor: `${primaryColor}15` }}
+                className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] rounded-full blur-3xl pointer-events-none transition-colors"
+            />
 
             <div className="w-full max-w-md space-y-8 relative z-10">
                 {/* Brand Header */}
                 <div className="text-center space-y-2">
-                    <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-slate-800 text-white shadow-lg ring-1 ring-white/10">
-                        <LayersIcon className="h-6 w-6" />
-                    </div>
+                    {branding?.logo_url ? (
+                        <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 p-2 shadow-xl ring-1 ring-white/10">
+                            <img
+                                src={branding.logo_url}
+                                alt={companyName}
+                                className="max-h-full max-w-full object-contain"
+                            />
+                        </div>
+                    ) : (
+                        <div
+                            style={{ backgroundColor: primaryColor }}
+                            className="inline-flex h-12 w-12 items-center justify-center rounded-xl text-white shadow-lg ring-1 ring-white/10 transition-colors"
+                        >
+                            <LayersIcon className="h-6 w-6" />
+                        </div>
+                    )}
                     <h2 className="text-2xl font-bold tracking-tight text-white">
-                        APEX POS & WMS
+                        {companyName}
                     </h2>
                     <p className="text-xs font-medium text-slate-400">
-                        Enterprise Access Control & Terminal Authentication
+                        {tagline}
                     </p>
                 </div>
 

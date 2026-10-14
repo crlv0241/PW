@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { AppLayout } from '../../../layouts/app-layout';
 import {
     UsersIcon,
@@ -12,6 +12,7 @@ import {
     CheckIcon,
     XIcon,
     SpinnerIcon,
+    PaletteIcon,
 } from '../../../components/ui/icons';
 import { Combobox } from '../../../components/ui/combobox';
 import { Modal } from '../../../components/ui/modal';
@@ -210,6 +211,24 @@ export default function UserManagement({ users, roles, filters }: Props) {
             <Head title="System Users - Super Admin" />
 
             <div className="space-y-6">
+                {/* Admin Sub-navigation Tabs */}
+                <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <Link
+                        href="/admin/users"
+                        className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3.5 py-1.5 text-xs font-semibold text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 shadow-sm"
+                    >
+                        <UsersIcon className="h-3.5 w-3.5" />
+                        <span>Users & RBAC Access</span>
+                    </Link>
+                    <Link
+                        href="/admin/settings"
+                        className="inline-flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100 transition-colors"
+                    >
+                        <PaletteIcon className="h-3.5 w-3.5" />
+                        <span>Branding, Logo & Colors</span>
+                    </Link>
+                </div>
+
                 {/* Header Metrics */}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
