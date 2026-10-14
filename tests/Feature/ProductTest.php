@@ -4,7 +4,13 @@ declare(strict_types=1);
 
 use App\Models\Product;
 use App\Models\ProductUom;
+use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
+
+beforeEach(function () {
+    $this->user = User::factory()->create();
+    $this->actingAs($this->user);
+});
 
 test('renders products index page with paginated master catalog', function () {
     $product = Product::factory()->create([

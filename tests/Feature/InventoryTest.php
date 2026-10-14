@@ -6,10 +6,14 @@ use App\Actions\Inventory\RecordStockMovementAction;
 use App\Models\InventoryBalance;
 use App\Models\Location;
 use App\Models\Product;
+use App\Models\User;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 
 beforeEach(function () {
+    $this->user = User::factory()->create();
+    $this->actingAs($this->user);
+
     $this->warehouse = Location::factory()->create(['code' => 'WH-TEST', 'type' => 'warehouse']);
     $this->truck = Location::factory()->create(['code' => 'TRK-TEST', 'type' => 'truck']);
     $this->product = Product::factory()->create(['sku' => 'SKU-INV-01']);
