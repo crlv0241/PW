@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AppLayout } from '../../../layouts/app-layout';
 import {
@@ -53,7 +53,21 @@ export default function SystemSettings({ settings, palettes }: Props) {
         dark_mode_default: settings.dark_mode_default,
     });
 
-    // Select a preset palette
+    // Synchronize form data and CSS variables if server settings change
+    useEffect(() => {
+        setData({
+            company_name: settings.company_name,
+            tagline: settings.tagline,
+            primary_color: settings.primary_color,
+            accent_color: settings.accent_color,
+            theme_palette: settings.theme_palette,
+            dark_mode_default: settings.dark_mode_default,
+        });
+        document.documentElement.style.setProperty('--brand-primary', settings.primary_color);
+        document.documentElement.style.setProperty('--brand-accent', settings.accent_color);
+    }, [settings]);
+
+    // Select a preset palette with instant live CSS custom properties update
     const handleSelectPalette = (palette: PaletteOption) => {
         setData((prev) => ({
             ...prev,
@@ -61,6 +75,26 @@ export default function SystemSettings({ settings, palettes }: Props) {
             primary_color: palette.primary,
             accent_color: palette.accent,
         }));
+        document.documentElement.style.setProperty('--brand-primary', palette.primary);
+        document.documentElement.style.setProperty('--brand-accent', palette.accent);
+    };
+
+    const handlePrimaryColorChange = (color: string) => {
+        setData((prev) => ({
+            ...prev,
+            primary_color: color,
+            theme_palette: 'custom',
+        }));
+        document.documentElement.style.setProperty('--brand-primary', color);
+    };
+
+    const handleAccentColorChange = (color: string) => {
+        setData((prev) => ({
+            ...prev,
+            accent_color: color,
+            theme_palette: 'custom',
+        }));
+        document.documentElement.style.setProperty('--brand-accent', color);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -103,6 +137,7 @@ export default function SystemSettings({ settings, palettes }: Props) {
 
     return (
         <AppLayout
+            eyebrow="System Governance"
             title="Branding & Theme"
             description="Configure organization details, logos, and color palette."
             breadcrumbs={[
@@ -317,7 +352,7 @@ export default function SystemSettings({ settings, palettes }: Props) {
                                         onClick={() => handleSelectPalette(palette)}
                                         className={`relative flex flex-col items-start p-3 rounded-lg border text-left transition-all ${
                                             isSelected
-                                                ? 'border-slate-900 bg-slate-50/80 shadow-sm ring-1 ring-slate-900 dark:border-slate-200 dark:bg-slate-800 dark:ring-slate-200'
+                                                ? 'border-brand bg-brand-subtle shadow-sm ring-1 ring-brand'
                                                 : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700'
                                         }`}
                                     >
@@ -326,7 +361,7 @@ export default function SystemSettings({ settings, palettes }: Props) {
                                                 {palette.name}
                                             </span>
                                             {isSelected && (
-                                                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
+                                                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-brand text-white">
                                                     <CheckIcon className="h-3 w-3" />
                                                 </div>
                                             )}
@@ -362,19 +397,13 @@ export default function SystemSettings({ settings, palettes }: Props) {
                                     <input
                                         type="color"
                                         value={data.primary_color}
-                                        onChange={(e) => {
-                                            setData('primary_color', e.target.value);
-                                            setData('theme_palette', 'custom');
-                                        }}
+                                        onChange={(e) => handlePrimaryColorChange(e.target.value)}
                                         className="h-9 w-12 cursor-pointer rounded-lg border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-800"
                                     />
                                     <input
                                         type="text"
                                         value={data.primary_color}
-                                        onChange={(e) => {
-                                            setData('primary_color', e.target.value);
-                                            setData('theme_palette', 'custom');
-                                        }}
+                                        onChange={(e) => handlePrimaryColorChange(e.target.value)}
                                         className="h-9 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 uppercase shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                                     />
                                 </div>
@@ -391,19 +420,13 @@ export default function SystemSettings({ settings, palettes }: Props) {
                                     <input
                                         type="color"
                                         value={data.accent_color}
-                                        onChange={(e) => {
-                                            setData('accent_color', e.target.value);
-                                            setData('theme_palette', 'custom');
-                                        }}
+                                        onChange={(e) => handleAccentColorChange(e.target.value)}
                                         className="h-9 w-12 cursor-pointer rounded-lg border border-slate-300 bg-white p-1 dark:border-slate-700 dark:bg-slate-800"
                                     />
                                     <input
                                         type="text"
                                         value={data.accent_color}
-                                        onChange={(e) => {
-                                            setData('accent_color', e.target.value);
-                                            setData('theme_palette', 'custom');
-                                        }}
+                                        onChange={(e) => handleAccentColorChange(e.target.value)}
                                         className="h-9 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-sm font-mono text-slate-900 uppercase shadow-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
                                     />
                                 </div>
@@ -419,7 +442,7 @@ export default function SystemSettings({ settings, palettes }: Props) {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="h-9 px-4 rounded-lg bg-slate-900 text-sm font-medium text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+                            className="h-9 px-4 rounded-lg bg-brand text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-2 transition-all"
                         >
                             {processing ? (
                                 <>

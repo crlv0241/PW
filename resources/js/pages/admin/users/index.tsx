@@ -202,7 +202,8 @@ export default function UserManagement({ users, roles, filters }: Props) {
 
     return (
         <AppLayout
-            title="User Accounts"
+            eyebrow="Access & Governance"
+            title="User Accounts."
             description="Manage user access and role assignments."
             breadcrumbs={[
                 { label: 'Admin', href: '/admin/users' },
@@ -212,7 +213,7 @@ export default function UserManagement({ users, roles, filters }: Props) {
                 <button
                     type="button"
                     onClick={() => setIsCreateModalOpen(true)}
-                    className="h-9 px-3.5 rounded-lg bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white shadow-sm inline-flex items-center gap-2 transition-colors"
+                    className="h-9 px-3.5 rounded-lg bg-brand text-white font-medium text-sm hover:opacity-90 shadow-sm inline-flex items-center gap-2 transition-all"
                 >
                     <PlusIcon className="h-4 w-4" />
                     <span>Add User</span>
@@ -226,7 +227,7 @@ export default function UserManagement({ users, roles, filters }: Props) {
                 <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
                     <Link
                         href="/admin/users"
-                        className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-900 dark:bg-slate-800 dark:text-slate-100"
+                        className="inline-flex items-center gap-2 rounded-lg bg-brand-subtle px-3 py-1.5 text-xs font-semibold text-brand"
                     >
                         <UsersIcon className="h-3.5 w-3.5" />
                         <span>Users</span>
@@ -270,7 +271,7 @@ export default function UserManagement({ users, roles, filters }: Props) {
 
                     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-subtle text-brand">
                                 <ShieldCheckIcon className="h-5 w-5" />
                             </div>
                             <div>
@@ -384,17 +385,12 @@ export default function UserManagement({ users, roles, filters }: Props) {
                                             </td>
 
                                             <td className="px-5 py-3.5">
-                                                {user.is_active ? (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                                                        <span>Active</span>
+                                                <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+                                                    <span className={`h-1.5 w-1.5 rounded-full ${user.is_active ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                                                    <span className={user.is_active ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}>
+                                                        {user.is_active ? 'Active' : 'Inactive'}
                                                     </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300">
-                                                        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
-                                                        <span>Inactive</span>
-                                                    </span>
-                                                )}
+                                                </span>
                                             </td>
 
                                             <td className="px-5 py-3.5 text-xs text-slate-500 dark:text-slate-400">
@@ -565,7 +561,7 @@ export default function UserManagement({ users, roles, filters }: Props) {
                         <button
                             type="submit"
                             disabled={createForm.processing}
-                            className="h-9 px-4 rounded-lg bg-slate-900 text-sm font-medium text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
+                            className="h-9 px-4 rounded-lg bg-brand text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5 transition-all"
                         >
                             {createForm.processing && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}
                             <span>Create User</span>
@@ -673,7 +669,7 @@ export default function UserManagement({ users, roles, filters }: Props) {
                         <button
                             type="submit"
                             disabled={editForm.processing}
-                            className="h-9 px-4 rounded-lg bg-slate-900 text-sm font-medium text-white shadow-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white disabled:opacity-50 inline-flex items-center gap-1.5 transition-colors"
+                            className="h-9 px-4 rounded-lg bg-brand text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-50 inline-flex items-center gap-1.5 transition-all"
                         >
                             {editForm.processing && <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />}
                             <span>Save Changes</span>

@@ -88,7 +88,8 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
 
     return (
         <AppLayout
-            title="Products"
+            eyebrow="Inventory Catalog"
+            title="Products."
             description="Manage catalog items, packaging units, and tax categories."
             breadcrumbs={[
                 { label: 'Back Office', href: '/products' },
@@ -98,7 +99,7 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                 <button
                     type="button"
                     onClick={() => setIsCreateOpen(true)}
-                    className="h-9 px-3.5 rounded-lg bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white shadow-sm inline-flex items-center gap-2 transition-colors"
+                    className="h-9 px-3.5 rounded-lg bg-brand text-white font-medium text-sm hover:opacity-90 shadow-sm inline-flex items-center gap-2 transition-all"
                 >
                     <PlusIcon className="h-4 w-4" />
                     <span>Add Product</span>
@@ -232,7 +233,7 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                                             key={uom.id}
                                                             className={`inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium border ${
                                                                 uom.is_base_unit
-                                                                    ? 'border-indigo-200 bg-indigo-50/60 text-indigo-900 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-200'
+                                                                    ? 'border-brand-subtle bg-brand-subtle text-brand'
                                                                     : 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                                                             }`}
                                                         >
@@ -262,15 +263,11 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                             </td>
 
                                             <td className="whitespace-nowrap px-4 py-3.5">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium border ${
-                                                        product.status === 'ACTIVE'
-                                                            ? 'border-emerald-200/80 bg-emerald-50 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                                            : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400'
-                                                    }`}
-                                                >
+                                                <span className="inline-flex items-center gap-1.5 text-xs font-medium">
                                                     <span className={`h-1.5 w-1.5 rounded-full ${product.status === 'ACTIVE' ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                                                    <span>{product.status === 'ACTIVE' ? 'Active' : 'Inactive'}</span>
+                                                    <span className={product.status === 'ACTIVE' ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}>
+                                                        {product.status === 'ACTIVE' ? 'Active' : 'Inactive'}
+                                                    </span>
                                                 </span>
                                             </td>
                                         </tr>
@@ -303,7 +300,7 @@ export default function ProductsIndex({ products, categories, filters }: Props) 
                                     }}
                                     className={`h-7 px-2.5 rounded-md text-xs font-medium transition ${
                                         link.active
-                                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900'
+                                            ? 'bg-brand text-white shadow-xs'
                                             : link.url
                                             ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
                                             : 'cursor-not-allowed opacity-40 text-slate-400'

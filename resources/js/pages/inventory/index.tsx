@@ -113,7 +113,8 @@ export default function InventoryIndex({ balances, locations, products, filters 
 
     return (
         <AppLayout
-            title="Stock Balances"
+            eyebrow="Warehouse Inventory"
+            title="Stock Balances."
             description="On-hand inventory balances across warehouse and vehicle locations."
             breadcrumbs={[
                 { label: 'Back Office', href: '/products' },
@@ -140,7 +141,7 @@ export default function InventoryIndex({ balances, locations, products, filters 
                             adjustForm.setData('client_uuid', crypto.randomUUID());
                             setIsAdjustOpen(true);
                         }}
-                        className="h-9 px-3.5 rounded-lg bg-slate-900 text-white font-medium text-sm hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white shadow-sm inline-flex items-center gap-2 transition-colors"
+                        className="h-9 px-3.5 rounded-lg bg-brand text-white font-medium text-sm hover:opacity-90 shadow-sm inline-flex items-center gap-2 transition-all"
                     >
                         <PlusIcon className="h-4 w-4" />
                         <span>Adjust Stock</span>
@@ -277,20 +278,31 @@ export default function InventoryIndex({ balances, locations, products, filters 
                                             </div>
                                         </td>
                                         <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                                            <span
-                                                className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium ${
-                                                    bal.current_qty > 50
-                                                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                            <span className="inline-flex items-center gap-1.5 text-xs font-medium">
+                                                <span
+                                                    className={`h-1.5 w-1.5 rounded-full ${
+                                                        bal.current_qty > 50
+                                                            ? 'bg-emerald-500'
+                                                            : bal.current_qty > 0
+                                                            ? 'bg-amber-500'
+                                                            : 'bg-rose-500'
+                                                    }`}
+                                                />
+                                                <span
+                                                    className={
+                                                        bal.current_qty > 50
+                                                            ? 'text-emerald-700 dark:text-emerald-400'
+                                                            : bal.current_qty > 0
+                                                            ? 'text-amber-700 dark:text-amber-400'
+                                                            : 'text-rose-700 dark:text-rose-400'
+                                                    }
+                                                >
+                                                    {bal.current_qty > 50
+                                                        ? 'In Stock'
                                                         : bal.current_qty > 0
-                                                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                                                        : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
-                                                }`}
-                                            >
-                                                {bal.current_qty > 50
-                                                    ? 'In Stock'
-                                                    : bal.current_qty > 0
-                                                    ? 'Low Stock'
-                                                    : 'Out of Stock'}
+                                                        ? 'Low Stock'
+                                                        : 'Out of Stock'}
+                                                </span>
                                             </span>
                                         </td>
                                     </tr>

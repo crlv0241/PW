@@ -113,8 +113,8 @@ export function FileDropzone({
                 onClick={() => inputRef.current?.click()}
                 className={`relative group cursor-pointer flex flex-col items-center justify-center rounded-xl border-2 border-dashed p-6 transition-all ${
                     isDragging
-                        ? 'border-indigo-500 bg-indigo-500/10 scale-[1.01]'
-                        : 'border-slate-200 hover:border-indigo-400 bg-slate-50/50 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-900'
+                        ? 'border-brand bg-brand-subtle scale-[1.01]'
+                        : 'border-slate-200 hover:border-brand-subtle bg-slate-50/50 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:bg-slate-900'
                 }`}
             >
                 <input
@@ -145,11 +145,11 @@ export function FileDropzone({
                     </div>
                 ) : (
                     <div className="flex flex-col items-center text-center space-y-2">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-950/60 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-subtle text-brand group-hover:scale-110 transition-transform">
                             <UploadCloudIcon className="h-6 w-6" />
                         </div>
                         <div>
-                            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                            <span className="text-xs font-semibold text-brand">
                                 Drag & drop file here
                             </span>
                             <span className="text-xs text-slate-500 dark:text-slate-400">

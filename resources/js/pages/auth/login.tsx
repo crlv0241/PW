@@ -166,7 +166,8 @@ export default function Login() {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="w-full h-9 flex items-center justify-center gap-2 rounded-lg bg-slate-100 text-slate-900 text-sm font-medium shadow-sm hover:bg-white focus:outline-none disabled:opacity-50 transition-colors"
+                            style={{ backgroundColor: primaryColor }}
+                            className="w-full h-9 flex items-center justify-center gap-2 rounded-lg text-white text-sm font-medium shadow-sm hover:opacity-90 focus:outline-none disabled:opacity-50 transition-opacity"
                         >
                             {processing ? (
                                 <>

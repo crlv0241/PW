@@ -77,7 +77,8 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
 
     return (
         <AppLayout
-            title="Movement Ledger"
+            eyebrow="Audit Log"
+            title="Movement Ledger."
             description="Audit log of inventory intake, transfers, sales, and adjustments."
             breadcrumbs={[
                 { label: 'Back Office', href: '/products' },
@@ -282,7 +283,7 @@ export default function InventoryLedgerPage({ ledgers, locations, products, filt
                                     }}
                                     className={`h-8 px-3 rounded-lg text-xs font-medium transition ${
                                         link.active
-                                            ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 shadow-sm'
+                                            ? 'bg-brand text-white shadow-xs'
                                             : link.url
                                             ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                                             : 'cursor-not-allowed opacity-40 text-slate-400'

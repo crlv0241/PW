@@ -10,3 +10,60 @@
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
 }
+
+:root {
+    --brand-primary: #4f46e5;
+    --brand-accent: #06b6d4;
+}
+
+/* Brand Background Utilities */
+.bg-brand {
+    background-color: var(--brand-primary) !important;
+}
+
+.bg-brand-hover:hover {
+    filter: brightness(0.92);
+}
+
+.bg-brand-subtle {
+    background-color: color-mix(in srgb, var(--brand-primary) 12%, transparent) !important;
+}
+
+.bg-brand-subtle-hover:hover {
+    background-color: color-mix(in srgb, var(--brand-primary) 18%, transparent) !important;
+}
+
+/* Brand Text & Border Utilities */
+.text-brand {
+    color: var(--brand-primary) !important;
+}
+
+.border-brand {
+    border-color: var(--brand-primary) !important;
+}
+
+.border-brand-subtle {
+    border-color: color-mix(in srgb, var(--brand-primary) 24%, transparent) !important;
+}
+
+.ring-brand {
+    --tw-ring-color: var(--brand-primary) !important;
+}
+
+/* Brand Accent Utilities */
+.bg-accent {
+    background-color: var(--brand-accent) !important;
+}
+
+.text-accent {
+    color: var(--brand-accent) !important;
+}
+
+.border-accent {
+    border-color: var(--brand-accent) !important;
+}
+
+.bg-accent-subtle {
+    background-color: color-mix(in srgb, var(--brand-accent) 14%, transparent) !important;
+}
+

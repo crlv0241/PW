@@ -166,7 +166,7 @@ export function Combobox({
                                         onMouseEnter={() => setActiveIndex(idx)}
                                         className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-xs transition-colors ${
                                             isActive || isSelected
-                                                ? 'bg-indigo-50 text-indigo-900 font-medium dark:bg-indigo-950/60 dark:text-indigo-200'
+                                                ? 'bg-brand-subtle text-brand font-medium'
                                                 : 'text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/60'
                                         }`}
                                     >
@@ -178,7 +178,7 @@ export function Combobox({
                                                 </span>
                                             )}
                                         </div>
-                                        {isSelected && <CheckIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />}
+                                        {isSelected && <CheckIcon className="h-4 w-4 text-brand" />}
                                     </li>
                                 );
                             })
