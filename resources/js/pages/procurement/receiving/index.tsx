@@ -80,6 +80,11 @@ export default function GoodsReceivingIndex({
     const [auditData, setAuditData] = useState<MatchAuditData | null>(null);
     const [isAuditLoading, setIsAuditLoading] = useState(false);
 
+    // Unlinked Delivery Linking State
+    const [receiptToLink, setReceiptToLink] = useState<GoodsReceipt | null>(null);
+    const [linkPoId, setLinkPoId] = useState<string>('');
+    const [isLinking, setIsLinking] = useState(false);
+
     // Blind intake form state
     const [selectedPoId, setSelectedPoId] = useState<string>('');
     const [selectedSupplierId, setSelectedSupplierId] = useState<string>(
@@ -325,6 +330,30 @@ export default function GoodsReceivingIndex({
         }
     };
 
+    const handleLinkPoSubmit = (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!receiptToLink || !linkPoId) return;
+
+        setIsLinking(true);
+        router.post(
+            `/procurement/receiving/${receiptToLink.id}/link-po`,
+            {
+                purchase_order_id: parseInt(linkPoId, 10),
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setIsLinking(false);
+                    setReceiptToLink(null);
+                    setLinkPoId('');
+                },
+                onError: () => {
+                    setIsLinking(false);
+                },
+            }
+        );
+    };
+
     const formatMoney = (cents: number | null | undefined) => {
         if (cents === null || cents === undefined) return '-';
         return (cents / 100).toLocaleString('en-US', {
@@ -537,14 +566,28 @@ export default function GoodsReceivingIndex({
                                                 {matchBadge(gr.match_status)}
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => inspectAudit(gr)}
-                                                    className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                                                >
-                                                    <FileTextIcon className="h-3.5 w-3.5" />
-                                                    <span>3-Way Match</span>
-                                                </button>
+                                                <div className="inline-flex items-center gap-1.5 justify-end">
+                                                    {gr.match_status === 'UNLINKED' && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setReceiptToLink(gr);
+                                                                setLinkPoId('');
+                                                            }}
+                                                            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-amber-500 text-white px-2.5 text-xs font-medium hover:bg-amber-600 shadow-xs transition"
+                                                        >
+                                                            <span>Link to PO</span>
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => inspectAudit(gr)}
+                                                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                                                    >
+                                                        <FileTextIcon className="h-3.5 w-3.5" />
+                                                        <span>3-Way Match</span>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))
@@ -1080,6 +1123,70 @@ export default function GoodsReceivingIndex({
                             </div>
                         </div>
                     ) : null}
+                </Modal>
+            )}
+
+            {/* Retroactive Link to Purchase Order Modal */}
+            {receiptToLink && (
+                <Modal
+                    isOpen={!!receiptToLink}
+                    onClose={() => setReceiptToLink(null)}
+                    title={`Link Goods Receipt ${receiptToLink.gr_number} to PO`}
+                    description={`Select an approved/sent Purchase Order for ${receiptToLink.supplier?.name} to associate with this intake.`}
+                    confirmText={isLinking ? 'Linking...' : 'Confirm Link to PO'}
+                    onConfirm={handleLinkPoSubmit}
+                    isLoading={isLinking}
+                    maxWidth="md"
+                >
+                    <div className="space-y-4">
+                        <div className="rounded-lg bg-amber-50 p-3 border border-amber-200 text-xs text-amber-800 dark:bg-amber-950/40 dark:border-amber-900 dark:text-amber-300">
+                            <strong>Retroactive 3-Way Reconciliation:</strong> Once linked, physical received lines will be matched against the purchase order items, and quantity / price variances will be automatically audited.
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                                Select Purchase Order <span className="text-rose-500">*</span>
+                            </label>
+                            <select
+                                value={linkPoId}
+                                onChange={(e) => setLinkPoId(e.target.value)}
+                                className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900 focus:border-brand focus:ring-1 focus:ring-brand dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                            >
+                                <option value="">-- Choose Purchase Order --</option>
+                                {openPurchaseOrders
+                                    .filter((po) => po.supplier_id === receiptToLink.supplier_id)
+                                    .map((po) => (
+                                        <option key={po.id} value={po.id}>
+                                            {po.po_number} - {(po.total_cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'PHP' })} ({po.status})
+                                        </option>
+                                    ))}
+                            </select>
+                            {openPurchaseOrders.filter((po) => po.supplier_id === receiptToLink.supplier_id).length === 0 && (
+                                <p className="mt-1 text-xs text-rose-500">
+                                    No open purchase orders found for {receiptToLink.supplier?.name}. Create or send a PO first.
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="rounded-lg bg-slate-50 p-3 border border-slate-200 dark:bg-slate-900 dark:border-slate-800 text-xs space-y-1">
+                            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                <span>Supplier:</span>
+                                <span className="font-medium text-slate-900 dark:text-slate-100">{receiptToLink.supplier?.name}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                <span>Delivery Note:</span>
+                                <span className="font-mono text-slate-900 dark:text-slate-100">{receiptToLink.supplier_delivery_note || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                <span>Supplier Invoice:</span>
+                                <span className="font-mono text-slate-900 dark:text-slate-100">{receiptToLink.supplier_invoice_number || 'N/A'}</span>
+                            </div>
+                            <div className="flex justify-between text-slate-600 dark:text-slate-400">
+                                <span>Invoice Total:</span>
+                                <span className="font-medium text-slate-900 dark:text-slate-100">{formatMoney(receiptToLink.supplier_invoice_amount_cents)}</span>
+                            </div>
+                        </div>
+                    </div>
                 </Modal>
             )}
         </AppLayout>

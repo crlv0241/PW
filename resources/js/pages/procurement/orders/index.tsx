@@ -12,7 +12,9 @@ import {
     TruckIcon,
     XIcon,
     EditIcon,
+    ReceiptIcon,
 } from '../../../components/ui/icons';
+import { RecordPaymentModal } from '../payables/components/record-payment-modal';
 import type {
     PurchaseOrder,
     Supplier,
@@ -49,6 +51,7 @@ export default function PurchaseOrdersIndex({
     const [perPage, setPerPage] = useState<number>(filters.per_page || 15);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
+    const [paymentPo, setPaymentPo] = useState<PurchaseOrder | null>(null);
 
     const formatDate = (dateStr?: string | null): string => {
         if (!dateStr) return '-';
@@ -154,6 +157,33 @@ export default function PurchaseOrdersIndex({
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                         <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                         Draft
+                    </span>
+                );
+        }
+    };
+
+    const paymentStatusBadge = (status?: string) => {
+        switch (status) {
+            case 'PAID':
+                return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+                        <span className="h-1 w-1 rounded-full bg-emerald-500" />
+                        Paid
+                    </span>
+                );
+            case 'PARTIALLY_PAID':
+                return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800">
+                        <span className="h-1 w-1 rounded-full bg-amber-500" />
+                        Partial
+                    </span>
+                );
+            case 'UNPAID':
+            default:
+                return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">
+                        <span className="h-1 w-1 rounded-full bg-slate-400" />
+                        Unpaid
                     </span>
                 );
         }
@@ -432,7 +462,10 @@ export default function PurchaseOrdersIndex({
 
                                                 {/* Status */}
                                                 <td className="px-4 py-3 text-center">
-                                                    {statusBadge(po.status)}
+                                                    <div className="flex flex-col items-center justify-center gap-1">
+                                                        {statusBadge(po.status)}
+                                                        {paymentStatusBadge(po.payment_status)}
+                                                    </div>
                                                 </td>
 
                                                 {/* Actions */}
@@ -445,6 +478,17 @@ export default function PurchaseOrdersIndex({
                                                         >
                                                             Details
                                                         </button>
+                                                        {po.status !== 'CANCELLED' && po.status !== 'DRAFT' && po.payment_status !== 'PAID' && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setPaymentPo(po)}
+                                                                className="inline-flex h-8 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-400 px-2.5 text-xs font-medium transition-colors"
+                                                                title="Record AP Payment"
+                                                            >
+                                                                <ReceiptIcon className="h-3.5 w-3.5" />
+                                                                <span>Pay</span>
+                                                            </button>
+                                                        )}
                                                         {po.status !== 'COMPLETED' && po.status !== 'CANCELLED' && (
                                                             <Link
                                                                 href={`/procurement/orders/${po.id}/edit`}
@@ -701,19 +745,47 @@ export default function PurchaseOrdersIndex({
                                         {formatMoney(selectedOrder.total_cents)}
                                     </span>
                                 </div>
+                                <div className="flex justify-between text-slate-600 dark:text-slate-400 pt-1">
+                                    <span>Paid to Date:</span>
+                                    <span className="font-mono text-emerald-600 font-semibold">
+                                        {formatMoney(selectedOrder.paid_amount_cents || 0)}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between text-xs font-bold text-slate-900 dark:text-slate-100 pt-1 border-t border-dashed border-slate-200 dark:border-slate-800">
+                                    <span>Remaining Balance:</span>
+                                    <span className="font-mono text-amber-600">
+                                        {formatMoney(Math.max(0, selectedOrder.total_cents - (selectedOrder.paid_amount_cents || 0)))}
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
                         <div className="flex items-center justify-between pt-2">
-                            {selectedOrder.status !== 'COMPLETED' && selectedOrder.status !== 'CANCELLED' ? (
-                                <Link
-                                    href={`/procurement/orders/${selectedOrder.id}/edit`}
-                                    className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                                >
-                                    <EditIcon className="h-3.5 w-3.5 text-slate-500" />
-                                    <span>Adjust Order</span>
-                                </Link>
-                            ) : <div />}
+                            <div className="flex items-center gap-2">
+                                {selectedOrder.status !== 'COMPLETED' && selectedOrder.status !== 'CANCELLED' && (
+                                    <Link
+                                        href={`/procurement/orders/${selectedOrder.id}/edit`}
+                                        className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                                    >
+                                        <EditIcon className="h-3.5 w-3.5 text-slate-500" />
+                                        <span>Adjust Order</span>
+                                    </Link>
+                                )}
+                                {selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'DRAFT' && selectedOrder.payment_status !== 'PAID' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const current = selectedOrder;
+                                            setSelectedOrder(null);
+                                            setPaymentPo(current);
+                                        }}
+                                        className="inline-flex h-9 items-center gap-1.5 px-3 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 transition-colors shadow-xs"
+                                    >
+                                        <ReceiptIcon className="h-4 w-4" />
+                                        <span>Record AP Payment</span>
+                                    </button>
+                                )}
+                            </div>
                             <button
                                 type="button"
                                 onClick={() => setSelectedOrder(null)}
@@ -724,6 +796,27 @@ export default function PurchaseOrdersIndex({
                         </div>
                     </div>
                 </Modal>
+            )}
+
+            {/* Modal: Record AP Payment */}
+            {paymentPo && (
+                <RecordPaymentModal
+                    isOpen={!!paymentPo}
+                    onClose={() => setPaymentPo(null)}
+                    supplierId={paymentPo.supplier_id}
+                    supplierName={paymentPo.supplier?.name || suppliers.find((s) => s.id === paymentPo.supplier_id)?.name || 'Supplier'}
+                    preSelectedPoId={paymentPo.id}
+                    openPurchaseOrders={[
+                        {
+                            id: paymentPo.id,
+                            po_number: paymentPo.po_number,
+                            supplier_reference: paymentPo.supplier_reference,
+                            total_cents: paymentPo.total_cents,
+                            paid_amount_cents: paymentPo.paid_amount_cents || 0,
+                            balance_cents: Math.max(0, paymentPo.total_cents - (paymentPo.paid_amount_cents || 0)),
+                        },
+                    ]}
+                />
             )}
         </AppLayout>
     );

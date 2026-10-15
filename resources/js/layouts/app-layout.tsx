@@ -15,6 +15,7 @@ import {
     PanelLeftOpenIcon,
     FileTextIcon,
     TruckIcon,
+    ReceiptIcon,
 } from '../components/ui/icons';
 
 interface AuthUser {
@@ -296,6 +297,15 @@ export function AppLayout({ children, title, eyebrow, description, breadcrumbs, 
                         >
                             <TruckIcon className="h-4 w-4 shrink-0" />
                             {isNavExpanded && <span className="truncate whitespace-nowrap">Goods Receiving</span>}
+                        </Link>
+
+                        <Link
+                            href="/procurement/payables"
+                            title="Supplier Payables (Accounts Payable)"
+                            className={navItemClasses(isCurrent('/procurement/payables'))}
+                        >
+                            <ReceiptIcon className="h-4 w-4 shrink-0" />
+                            {isNavExpanded && <span className="truncate whitespace-nowrap">Supplier Payables</span>}
                         </Link>
 
                         <Link

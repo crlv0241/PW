@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Procurement;
 
+use App\Actions\Procurement\LinkGoodsReceiptToPurchaseOrderAction;
 use App\Actions\Procurement\ReceiveGoodsAction;
 use App\Actions\Procurement\ReconcileThreeWayMatchAction;
 use App\Http\Controllers\Controller;
@@ -140,5 +141,29 @@ final class GoodsReceiptController extends Controller
             'audit' => $audit,
             'receipt' => $receipt->fresh(['purchaseOrder.lines.product', 'lines.product', 'lines.uom', 'supplier']),
         ]);
+    }
+
+    /**
+     * Retroactively link an unlinked goods receipt to a Purchase Order.
+     */
+    public function linkToPo(
+        GoodsReceipt $receipt,
+        Request $request,
+        LinkGoodsReceiptToPurchaseOrderAction $linkAction
+    ): RedirectResponse {
+        $validated = $request->validate([
+            'purchase_order_id' => ['required', 'integer', 'exists:purchase_orders,id'],
+        ]);
+
+        /** @var PurchaseOrder $po */
+        $po = PurchaseOrder::query()->findOrFail($validated['purchase_order_id']);
+
+        $linkAction->execute($receipt, $po);
+
+        return back()->with('success', sprintf(
+            'Goods Receipt %s successfully linked to Purchase Order %s.',
+            $receipt->gr_number,
+            $po->po_number
+        ));
     }
 }

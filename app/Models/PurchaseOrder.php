@@ -4,11 +4,33 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property string $po_number
+ * @property string|null $supplier_reference
+ * @property int $supplier_id
+ * @property int $destination_location_id
+ * @property string $status
+ * @property string|null $tax_type
+ * @property Carbon|null $order_date
+ * @property Carbon|null $expected_delivery_date
+ * @property int $subtotal_cents
+ * @property int $line_discount_cents
+ * @property int $discount_cents
+ * @property int $tax_cents
+ * @property int $total_cents
+ * @property int $paid_amount_cents
+ * @property string $payment_status
+ * @property Location|null $destinationLocation
+ * @property Collection<int, PurchaseOrderLine> $lines
+ */
 final class PurchaseOrder extends Model
 {
     use SoftDeletes;
@@ -34,6 +56,8 @@ final class PurchaseOrder extends Model
         'discount_cents',
         'tax_cents',
         'total_cents',
+        'paid_amount_cents',
+        'payment_status',
         'notes',
         'created_by',
     ];
@@ -53,6 +77,7 @@ final class PurchaseOrder extends Model
             'discount_cents' => 'integer',
             'tax_cents' => 'integer',
             'total_cents' => 'integer',
+            'paid_amount_cents' => 'integer',
         ];
     }
 
@@ -102,5 +127,13 @@ final class PurchaseOrder extends Model
     public function goodsReceipts(): HasMany
     {
         return $this->hasMany(GoodsReceipt::class);
+    }
+
+    /**
+     * @return HasMany<SupplierPayment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SupplierPayment::class);
     }
 }

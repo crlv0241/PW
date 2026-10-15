@@ -63,6 +63,39 @@ export interface Supplier {
     address: string | null;
     payment_terms_days: number;
     is_active: boolean;
+    total_pos_count?: number;
+    open_pos_count?: number;
+    total_invoiced_cents?: number;
+    total_paid_cents?: number;
+    outstanding_balance_cents?: number;
+    payment_status?: 'UNPAID' | 'PARTIALLY_PAID' | 'SETTLED';
+    payments?: SupplierPayment[];
+    created_at: string;
+    updated_at: string;
+}
+
+export interface SupplierPayment {
+    id: number;
+    payment_number: string;
+    supplier_id: number;
+    purchase_order_id: number | null;
+    amount_cents: number;
+    payment_method: 'CASH' | 'CHEQUE' | 'BANK_TRANSFER';
+    payment_date: string;
+    cheque_number: string | null;
+    bank_name: string | null;
+    cheque_date: string | null;
+    clearing_date: string | null;
+    payee_name: string | null;
+    reference_number: string | null;
+    voucher_number: string | null;
+    status: 'COMPLETED' | 'PENDING_CLEARING' | 'BOUNCED' | 'VOID';
+    notes: string | null;
+    recorded_by: number | null;
+    supplier?: Supplier;
+    purchase_order?: PurchaseOrder;
+    purchaseOrder?: PurchaseOrder;
+    recorder?: { id: number; name: string } | null;
     created_at: string;
     updated_at: string;
 }
@@ -153,6 +186,8 @@ export interface PurchaseOrder {
     discount_cents: number;
     tax_cents: number;
     total_cents: number;
+    paid_amount_cents?: number;
+    payment_status?: 'UNPAID' | 'PARTIALLY_PAID' | 'PAID';
     notes: string | null;
     created_by: number | null;
     supplier?: Supplier;
@@ -160,6 +195,7 @@ export interface PurchaseOrder {
     destinationLocation?: Location;
     creator?: { id: number; name: string } | null;
     lines?: PurchaseOrderLine[];
+    payments?: SupplierPayment[];
     created_at: string;
     updated_at: string;
 }

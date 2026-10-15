@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\Procurement\GoodsReceiptController;
 use App\Http\Controllers\Procurement\PurchaseOrderController;
+use App\Http\Controllers\Procurement\SupplierPayablesController;
 use App\Http\Controllers\ProductController;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/receiving', [GoodsReceiptController::class, 'index'])->name('receiving.index');
         Route::post('/receiving', [GoodsReceiptController::class, 'store'])->name('receiving.store');
         Route::get('/receiving/{receipt}/reconcile', [GoodsReceiptController::class, 'reconcile'])->name('receiving.reconcile');
+        Route::post('/receiving/{receipt}/link-po', [GoodsReceiptController::class, 'linkToPo'])->name('receiving.link-po');
+
+        // Accounts Payable & Supplier Payments
+        Route::get('/payables', [SupplierPayablesController::class, 'index'])->name('payables.index');
+        Route::get('/payables/{supplier}', [SupplierPayablesController::class, 'show'])->name('payables.show');
+        Route::post('/payables/payments', [SupplierPayablesController::class, 'storePayment'])->name('payables.payments.store');
     });
 
     // Super Admin Web Console
